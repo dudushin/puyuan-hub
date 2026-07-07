@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>樸園人专区 PureLanders Hub</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
+<meta property="og:title" content="樸園人专区 PureLanders Hub">
+<meta property="og:description" content="樸園社区活动日历、空间预订与出席登记系统">
+<meta property="og:image" content="https://sun.pureland.club/og-image.png">
+<meta property="og:url" content="https://sun.pureland.club/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://sun.pureland.club/og-image.png">
+<style>
+:root {
+  --surface-0: #ffffff;
+  --surface-1: #f7f7f8;
+  --surface-2: #eef0f2;
+  --border: #d8dadd;
+  --border-accent: #3a6ff0;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a4a4a;
+  --text-muted: #8a8a8a;
+  --text-danger: #c62828;
+  --text-warning: #8a6d00;
+  --bg-danger: #fdeaea;
+  --bg-warning: #fff6dd;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 20px;
+  line-height: 1.5;
+}
+.appWrap { max-width: 1200px; margin: 0 auto; }
+button {
+  font-family: inherit; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  border-radius: 8px; padding: 8px 12px;
+}
+button:hover { background: var(--surface-2); }
+input, select {
+  font-family: inherit; font-size: 13px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text-primary);
+}
+a { color: inherit; }
+@media (max-width: 820px) {
+  .puyuanGrid { grid-template-columns: 1fr !important; }
+  .puyuanFormGrid2 { grid-template-columns: 1fr !important; }
+  .puyuanFormGrid3 { grid-template-columns: 1fr !important; }
+}
+.dayCell { position:relative; min-height:60px; max-height:60px; overflow:visible; text-align:left; border:0.5px solid var(--border); border-radius:6px; padding:3px; display:flex; flex-direction:column; transition: transform 0.15s ease; cursor:pointer; background:#fff; }
+.dayCell:hover { transform: scale(1.25); z-index: 50; box-shadow: 0 6px 20px rgba(0,0,0,0.18); }
+.dayCellInner { overflow:hidden; max-height:48px; }
+.dayPill { border-radius:3px; font-size:9px; padding:1px 3px; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dayTooltip { display:none; position:absolute; top:100%; left:0; margin-top:4px; min-width:170px; max-width:230px; background:var(--surface-1); border:1px solid var(--border); border-radius:8px; padding:8px 10px; box-shadow:0 6px 20px rgba(0,0,0,0.2); z-index:100; text-align:left; font-size:11px; line-height:1.5; }
+.dayCell:hover .dayTooltip { display:block; }
+.highlightFlash { animation: flashBorder 1.5s ease; }
+@keyframes flashBorder { 0%{ box-shadow:0 0 0 3px var(--border-accent); } 100%{ box-shadow:0 0 0 0 transparent; } }
+.pwOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.pwBox { background:#fff; border-radius:12px; padding:20px; max-width:280px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.25); }
+.spaceCheckGrid { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; }
+.dateChip { display:inline-flex; align-items:center; gap:4px; background:var(--surface-1); border-radius:14px; padding:3px 8px; font-size:11px; margin:2px; }
+.toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2e7d32; color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; z-index:2000; box-shadow:0 4px 16px rgba(0,0,0,0.25); }
+</style>
+</head>
+<body>
+<div class="appWrap">
+
+<h2 style="font-size:18px;font-weight:600;margin-bottom:14px;">樸園人专区 <span style="font-weight:400;opacity:0.7;font-size:14px;">PureLanders Hub</span></h2>
+
+<div id="pwModal" class="pwOverlay" style="display:none;">
+  <div class="pwBox">
+    <div style="font-weight:500;margin-bottom:10px;">请输入管理密码</div>
+    <input type="password" id="pwInput" placeholder="密码" style="width:100%;margin-bottom:8px;">
+    <div id="pwError" style="color:var(--text-danger);font-size:12px;margin-bottom:8px;display:none;">密码错误，请重试。</div>
+    <div style="display:flex;gap:8px;">
+      <button id="pwConfirm" style="flex:1;">确认</button>
+      <button id="pwCancel" style="flex:1;">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastBox"></div>
+<div id="loadStatus" style="font-size:12px;color:var(--text-danger);margin-bottom:10px;"></div>
+<div id="upcomingBanner" style="display:none;background:var(--bg-warning);color:var(--text-warning);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;font-size:13px;"></div>
+
+<div style="margin-bottom:14px;">
+  <input type="text" id="searchInput" placeholder="搜寻活动名称或备注...（点击结果可直接跳转）" style="width:100%;">
+</div>
+<div id="searchResults" style="display:none;margin-bottom:1rem;"></div>
+
+<div id="mainContent" class="puyuanGrid" style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;">
+
+<div style="min-width:0;">
+
+<div id="orgTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;min-height:32px;"></div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+  <button id="prevMonth" aria-label="上个月">‹</button>
+  <div id="monthLabel" style="font-size:16px;font-weight:500;"></div>
+  <button id="nextMonth" aria-label="下个月">›</button>
+</div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;margin-bottom:8px;color:var(--text-muted);">
+  <span><span style="display:inline-block;width:10px;height:10px;background:#e0e0e0;border-radius:2px;vertical-align:-1px;"></span> 假期</span>
+  <span><span style="display:inline-block;width:10px;height:10px;border:2px solid #8e24aa;border-radius:2px;vertical-align:-1px;"></span> 公共假期上课</span>
+  <span><span style="display:inline-block;width:10px;height:10px;background:#4fc3f7;border-radius:2px;vertical-align:-1px;"></span> 全校活动</span>
+</div>
+
+<div id="calendarGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:1.5rem;"></div>
+
+<div id="dayDetail" style="display:none;background:var(--surface-1);border-radius:var(--radius);padding:12px;margin-bottom:1.5rem;font-size:13px;"></div>
+
+<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+  <div id="formTitle" style="font-size:16px;font-weight:500;margin-bottom:12px;">新增活动 / 预订</div>
+  <div class="puyuanFormGrid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+    <div>
+      <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">组织</label>
+      <select id="org" style="width:100%;">
+        <option value="学校行政">教师团 Teacher Team</option>
+        <option value="爸爸团">爸爸团 BOT</option>
+        <option value="妈妈团">妈妈团 Sister Group</option>
+        <option value="幼儿园">幼儿园 Kindy</option>
+        <option value="协力圈">协力圈 Dynamic Team</option>
+        <option value="樸社团">樸社团 Persatuan</option>
+        <option value="校友">校友 Alumni</option>
+        <option value="第三方">第三方 Third Party</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">负责人姓名</label>
+      <input type="text" id="organizerName" placeholder="例如：陈太太" style="width:100%;">
+    </div>
+  </div>
+  <div style="margin-bottom:12px;">
+    <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">空间（可多选，留空即纯行政活动）</label>
+    <div class="spaceCheckGrid" id="spaceCheckGrid" style="max-height:170px;overflow-y:auto;padding:8px;background:var(--surface-1);border-radius:8px;min-height:60px;"></div>
+  </div>
+  <div style="margin-bottom:12px;">
+    <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">活动名称</label>
+    <input type="text" id="eventName" placeholder="例如：亲子手作日" style="width:100%;">
+  </div>
+  <div class="puyuanFormGrid3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px;">
+    <div>
+      <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">日期</label>
+      <input type="date" id="eventDate" style="width:100%;">
+    </div>
+    <div>
+      <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">开始时间</label>
+      <input type="time" id="startTime" style="width:100%;">
+    </div>
+    <div>
+      <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">结束时间</label>
+      <input type="time" id="endTime" style="width:100%;">
+    </div>
+  </div>
+  <div style="margin-bottom:12px;">
+    <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">若活动连续多天（例如营队），填结束日期：</label>
+    <input type="date" id="eventDateEnd" style="width:100%;">
+  </div>
+  <div style="margin-bottom:12px;">
+    <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">备注（选填）</label>
+    <input type="text" id="notes" placeholder="联系人 / 用途等" style="width:100%;">
+  </div>
+  <div style="margin-bottom:12px;">
+    <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">重复（与上面的连续多天分开，不要同时使用）</label>
+    <select id="recurring" style="width:100%;margin-bottom:8px;">
+      <option value="none">不重复</option>
+      <option value="weekly">每周重复</option>
+      <option value="custom">自选日期</option>
+    </select>
+    <div id="recurUntilBox" style="display:none;margin-bottom:8px;">
+      <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">重复至（含当天）</label>
+      <input type="date" id="recurUntil" style="width:100%;">
+    </div>
+    <div id="customDatesBox" style="display:none;">
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input type="date" id="customDateInput" style="flex:1;">
+        <button id="addCustomDate" type="button">+ 加入</button>
+      </div>
+      <div id="customDateChips"></div>
+    </div>
+  </div>
+  <div style="margin-bottom:12px;padding:10px 12px;background:var(--surface-1);border-radius:var(--radius);">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;margin-bottom:6px;">
+      <input type="checkbox" id="showInUpdates" checked style="width:auto;">显示在活动更新栏（右侧列表）
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;">
+      <input type="checkbox" id="needRsvp" style="width:auto;">开放大家登记出席
+    </label>
+  </div>
+  <div id="conflictWarning" style="display:none;background:var(--bg-danger);color:var(--text-danger);border-radius:var(--radius);padding:10px 12px;font-size:13px;margin-bottom:12px;"></div>
+  <div style="display:flex;gap:8px;">
+    <button id="submitBtn" style="flex:1;"><span id="submitBtnLabel">提交</span></button>
+    <button id="cancelEditBtn" style="display:none;">取消编辑</button>
+  </div>
+</div>
+
+<div style="margin-bottom:1rem;">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">标记假期 / 全校活动日（需要密码）</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">已标记的纪录不会列在这里，请到上方月历点选当天日期查看、编辑或删除。</div>
+  <div class="puyuanFormGrid3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+    <select id="specialType">
+      <option value="holiday">假期（可连续多天）</option>
+      <option value="classOnPH">公共假期但上课（单日）</option>
+      <option value="bigEvent">全校大活动（单日）</option>
+    </select>
+    <input type="date" id="specialDateStart">
+    <input type="date" id="specialDateEnd" placeholder="结束日期（假期专用）">
+  </div>
+  <input type="text" id="specialLabel" placeholder="名称（选填，如：农历新年 / 运动会）" style="width:100%;margin-bottom:8px;">
+  <button id="addSpecialDate" style="width:100%;">标记 / 更新</button>
+</div>
+
+</div>
+
+<div style="min-width:0;">
+  <div style="font-size:15px;font-weight:500;margin-bottom:8px;">全校大活动</div>
+  <div id="bigEventList" style="margin-bottom:20px;"></div>
+
+  <div style="font-size:16px;font-weight:500;margin-bottom:8px;">活动更新</div>
+  <div id="debugCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
+  <div id="rsvpList"></div>
+  <div id="pastSection" style="margin-top:20px;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text-muted);">过去活动</div>
+    <div id="pastList"></div>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">可用"复制文字摘要"按钮把内容贴到WhatsApp群，或"加入Google日历"存到你自己的日历。「从活动更新移除」只是不再显示于此列表，不会删除月历纪录；要删除月历纪录请到月历点选当天进行删除。以上都需要管理密码。</div>
+</div>
+
+</div>
+</div>
+
+<script>
+try {
+
+// ====== Supabase 连接设定 ======
+var SUPABASE_URL = 'https://uykfqhawoscqjejamtyh.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_cszjPx_JojpUp5YKOeTejA_2rmdlxdC';
+
+function sbHeaders(extra){
+  var h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+  if(extra){ for(var k in extra){ h[k] = extra[k]; } }
+  return h;
+}
+function storageGet(key){
+  return fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key) + '&select=value', { headers: sbHeaders() })
+    .then(function(r){ if(!r.ok){ throw new Error('HTTP '+r.status); } return r.json(); })
+    .then(function(rows){ return (rows && rows.length) ? rows[0].value : null; });
+}
+function storageSet(key, value){
+  return fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key), {
+    method: 'PATCH',
+    headers: sbHeaders({'Prefer':'return=representation'}),
+    body: JSON.stringify({ value: value })
+  }).then(function(r){ return r.json(); }).then(function(rows){
+    if(!rows || rows.length === 0){
+      return fetch(SUPABASE_URL + '/rest/v1/app_data', {
+        method: 'POST',
+        headers: sbHeaders({'Prefer':'return=minimal'}),
+        body: JSON.stringify({ key: key, value: value })
+      }).then(function(r2){ if(!r2.ok){ throw new Error('HTTP '+r2.status); } return true; });
+    }
+    return true;
+  });
+}
+// ====== 以上是资料储存部分 ======
+
+var ORGS = [
+  {v:"学校行政", en:"Teacher Team"},
+  {v:"爸爸团", en:"BOT"},
+  {v:"妈妈团", en:"Sister Group"},
+  {v:"幼儿园", en:"Kindy"},
+  {v:"协力圈", en:"Dynamic Team"},
+  {v:"樸社团", en:"Persatuan"},
+  {v:"校友", en:"Alumni"},
+  {v:"第三方", en:"Third Party"}
+];
+var ORG_LABEL_OVERRIDE = { "学校行政": "教师团" };
+function orgLabel(v){ return ORG_LABEL_OVERRIDE[v] || v; }
+var ORG_COLORS = {
+  "学校行政":{bg:"#a5d6a7",fg:"#1b5e20"},
+  "爸爸团":{bg:"#1565c0",fg:"#ffffff"},
+  "妈妈团":{bg:"#ef6c00",fg:"#ffffff"},
+  "幼儿园":{bg:"#ec407a",fg:"#ffffff"},
+  "协力圈":{bg:"#6a1b9a",fg:"#ffffff"},
+  "樸社团":{bg:"#f9a825",fg:"#1a1a1a"},
+  "校友":{bg:"#6d4c41",fg:"#ffffff"},
+  "第三方":{bg:"#fff59d",fg:"#5d4300"}
+};
+function orgStyle(org){ var c = ORG_COLORS[org] || {bg:"#757575",fg:"#ffffff"}; return 'background:'+c.bg+';color:'+c.fg+';'; }
+
+var SPACE_GROUPS = {
+  "校舍1": ["校舍1-1年级教室","校舍1-2年级教室","校舍1-3年级教室","校舍1-4年级教室","校舍1-5年级教室","校舍1-6年级教室","校舍1-7年级教室","校舍1-艺术课室","校舍1-图书馆","校舍1-办公室","校舍1-篮球场","校舍1-食堂","校舍1-户外草场"],
+  "校舍2": ["校舍2-幼儿园"],
+  "校舍3": ["校舍3-会议室","校舍3-大厅"],
+  "其他": ["其他-线上"]
+};
+function stripSpacePrefix(sp){
+  return sp.replace('校舍1-','').replace('校舍2-','').replace('校舍3-','').replace('其他-','');
+}
+
+var bookings = [];
+var specialDates = [];
+var customDates = [];
+var viewDate = new Date();
+var selectedDay = null;
+var activeTab = "总览";
+var expandedId = null;
+var copyFeedbackId = null;
+var editingId = null;
+var editingSeriesId = null;
+var searchTerm = '';
+var adminPassword = 'pl123';
+var pendingAction = null;
+
+function toMinutes(t){ var parts = t.split(":"); return parseInt(parts[0],10)*60+parseInt(parts[1],10); }
+function overlaps(a,b){
+  if(a.date !== b.date || !a.space || !b.space || a.space !== b.space) return false;
+  return toMinutes(a.start) < toMinutes(b.end) && toMinutes(b.start) < toMinutes(a.end);
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    if(c==='&') return '&amp;';
+    if(c==='<') return '&lt;';
+    if(c==='>') return '&gt;';
+    if(c==='"') return '&quot;';
+    return '&#39;';
+  });
+}
+function pad(n){ return n<10 ? '0'+n : ''+n; }
+function dateStr(y,m,d){ return y+'-'+pad(m+1)+'-'+pad(d); }
+function todayStr(){ var d=new Date(); return dateStr(d.getFullYear(), d.getMonth(), d.getDate()); }
+function addDays(ds, n){ var d = new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n); return dateStr(d.getFullYear(), d.getMonth(), d.getDate()); }
+function mondayIndex(jsDay){ return (jsDay+6)%7; }
+
+function showToast(msg){
+  var box = document.getElementById('toastBox');
+  var el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  box.innerHTML = '';
+  box.appendChild(el);
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 2200);
+}
+
+function showPasswordModal(action){
+  pendingAction = action;
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwError').style.display = 'none';
+  document.getElementById('pwModal').style.display = 'flex';
+  document.getElementById('pwInput').focus();
+}
+document.getElementById('pwConfirm').addEventListener('click', function(){
+  var val = document.getElementById('pwInput').value;
+  if(val === adminPassword){
+    document.getElementById('pwModal').style.display = 'none';
+    var act = pendingAction; pendingAction = null;
+    if(act) act();
+  } else {
+    document.getElementById('pwError').style.display = 'block';
+  }
+});
+document.getElementById('pwCancel').addEventListener('click', function(){
+  document.getElementById('pwModal').style.display = 'none';
+  pendingAction = null;
+});
+document.getElementById('pwInput').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('pwConfirm').click(); }
+});
+
+function copyText(text){
+  return new Promise(function(resolve){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){resolve(true);}).catch(function(){ fallbackCopy(text); resolve(true); });
+    } else { fallbackCopy(text); resolve(true); }
+  });
+}
+function fallbackCopy(text){
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+}
+function buildSummary(b){
+  var attendees = b.attendees || [];
+  var going = attendees.filter(function(a){return a.response==='去';}).map(function(a){return a.name+(a.phone?('('+a.phone+')'):'');});
+  var notGoing = attendees.filter(function(a){return a.response==='不去';}).map(function(a){return a.name;});
+  var lines = [];
+  lines.push(b.eventName);
+  lines.push(b.date+' '+b.start+'-'+b.end+(b.space?(' · '+b.space):''));
+  lines.push('');
+  lines.push('参加（'+going.length+'）：'+(going.length?going.join('、'):'无'));
+  lines.push('不参加（'+notGoing.length+'）：'+(notGoing.length?notGoing.join('、'):'无'));
+  return lines.join(String.fromCharCode(10));
+}
+function gcalUrl(b){
+  var s = b.date.replace(/-/g,'')+'T'+b.start.replace(':','')+'00';
+  var e = b.date.replace(/-/g,'')+'T'+b.end.replace(':','')+'00';
+  var text = encodeURIComponent(b.eventName);
+  var details = encodeURIComponent((b.notes||'')+(b.organizerName?(String.fromCharCode(10)+'负责人：'+b.organizerName):''));
+  var loc = encodeURIComponent(b.space||'');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+text+'&dates='+s+'/'+e+'&details='+details+'&location='+loc;
+}
+
+function renderUpcomingBanner(){
+  var box = document.getElementById('upcomingBanner');
+  var today = todayStr();
+  var in48 = addDays(today, 2);
+  var list = bookings.filter(function(b){return b.date>=today && b.date<=in48;}).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  if(list.length===0){ box.style.display='none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<b>即将到来（48小时内）：</b> ' + list.map(function(b){return escapeHtml(b.eventName)+'（'+b.date.slice(5)+' '+b.start+'）';}).join('　·　');
+}
+
+function renderTabs(){
+  var box = document.getElementById('orgTabs');
+  var html = '<button class="tabBtn" data-tab="总览" style="'+(activeTab==="总览"?'background:var(--surface-2);border:2px solid var(--border-accent);font-weight:500;':'')+'border-radius:20px;padding:6px 14px;font-size:13px;">总览</button>';
+  for(var i=0;i<ORGS.length;i++){
+    var o = ORGS[i];
+    var isActive = o.v===activeTab;
+    var activeStyle = isActive ? 'border:2px solid var(--border-accent);font-weight:500;' : '';
+    html += '<button class="tabBtn" data-tab="'+o.v+'" style="'+orgStyle(o.v)+activeStyle+'border-radius:20px;padding:6px 14px;font-size:13px;">'+escapeHtml(orgLabel(o.v))+' <span style="font-size:9px;opacity:0.8;">'+o.en+'</span></button>';
+  }
+  box.innerHTML = html;
+  var btns = box.querySelectorAll('.tabBtn');
+  for(var j=0;j<btns.length;j++){
+    btns[j].addEventListener('click', function(){
+      activeTab = this.getAttribute('data-tab');
+      selectedDay = null;
+      renderTabs(); renderCalendar(); renderDayDetail();
+    });
+  }
+}
+
+function renderSpaceCheckboxes(){
+  var box = document.getElementById('spaceCheckGrid');
+  var html = '';
+  var groups = Object.keys(SPACE_GROUPS);
+  for(var g=0; g<groups.length; g++){
+    var groupName = groups[g];
+    html += '<div style="grid-column:1/-1;font-size:11px;font-weight:500;color:var(--text-muted);margin-top:6px;">'+groupName+'</div>';
+    var spaces = SPACE_GROUPS[groupName];
+    for(var s=0; s<spaces.length; s++){
+      var sp = spaces[s];
+      var label = stripSpacePrefix(sp);
+      html += '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="checkbox" class="spaceCheck" value="'+sp+'" style="width:auto;">'+label+'</label>';
+    }
+    if(groupName === '其他'){
+      html += '<div style="grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:4px;">'
+        + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;"><input type="checkbox" id="spaceCheckCustomToggle" style="width:auto;">其他地方</label>'
+        + '<input type="text" id="spaceCheckCustomText" placeholder="填写地点名称" style="flex:1;font-size:12px;padding:4px 6px;">'
+        + '</div>';
+    }
+  }
+  box.innerHTML = html;
+}
+
+function renderAll(){
+  document.getElementById('debugCount').textContent = '目前储存的活动数：'+bookings.length+'笔';
+  renderSpaceCheckboxes();
+  renderUpcomingBanner();
+  renderTabs();
+  renderCalendar();
+  renderRsvpList();
+  renderBigEventList();
+}
+
+function loadBookings(){
+  try{
+    renderSpaceCheckboxes();
+    renderTabs();
+    renderCalendar();
+  }catch(e0){
+    document.getElementById('loadStatus').textContent = '初始绘制错误：'+(e0 && e0.message ? e0.message : String(e0));
+  }
+
+  Promise.all([storageGet('bookings'), storageGet('specialDates')]).then(function(results){
+    bookings = results[0] || [];
+    specialDates = results[1] || [];
+    renderAll();
+  }).catch(function(err){
+    document.getElementById('loadStatus').textContent = '载入资料错误（请确认Supabase网址/key与资料表是否正确）：'+(err && err.message ? err.message : String(err));
+    renderAll();
+  });
+}
+function saveBookings(){
+  return storageSet('bookings', bookings).then(function(){
+    document.getElementById('debugCount').textContent = '目前储存的活动数：'+bookings.length+'笔（已同步）';
+  }).catch(function(err){
+    document.getElementById('debugCount').textContent = '储存错误：'+(err && err.message ? err.message : String(err));
+  });
+}
+function saveSpecialDates(){
+  return storageSet('specialDates', specialDates).catch(function(err){
+    document.getElementById('loadStatus').textContent = '假期资料储存错误：'+(err && err.message ? err.message : String(err));
+  });
+}
+
+function visibleBookings(){ if(activeTab === "总览") return bookings; return bookings.filter(function(b){return b.org===activeTab;}); }
+function getSpecial(ds){ for(var i=0;i<specialDates.length;i++){ if(specialDates[i].date===ds) return specialDates[i]; } return null; }
+var SPECIAL_TYPE_LABEL = {holiday:'假期', classOnPH:'公共假期上课', bigEvent:'全校大活动'};
+
+function renderCalendar(){
+  var y = viewDate.getFullYear(); var m = viewDate.getMonth();
+  document.getElementById('monthLabel').textContent = y + '年' + (m+1) + '月' + (activeTab!=="总览" ? '　·　'+orgLabel(activeTab) : '');
+  var firstDay = mondayIndex(new Date(y,m,1).getDay());
+  var daysInMonth = new Date(y,m+1,0).getDate();
+  var grid = document.getElementById('calendarGrid');
+  var data = visibleBookings();
+  var html = '';
+  var wd = ['一','二','三','四','五','六','日'];
+  for(var w=0; w<7; w++){ html += '<div style="text-align:center;font-size:11px;color:var(--text-muted);padding:4px 0;">'+wd[w]+'</div>'; }
+  for(var i=0;i<firstDay;i++){ html += '<div></div>'; }
+  for(var d=1; d<=daysInMonth; d++){
+    var ds = dateStr(y,m,d);
+    var dayEvents = data.filter(function(b){return b.date===ds;}).sort(function(a,b){return a.start.localeCompare(b.start);});
+    var special = getSpecial(ds);
+    var cellStyle = '';
+    var dayNumStyle = 'color:var(--text-secondary);';
+    var specialPill = '';
+    if(special){
+      if(special.type==='bigEvent'){
+        cellStyle += 'background:#4fc3f7;'; dayNumStyle = 'color:#0d47a1;';
+        specialPill = '<div class="dayPill" style="background:rgba(13,71,161,0.18);color:#0d47a1;font-weight:700;">'+escapeHtml(special.label || '全校活动')+'</div>';
+      }
+      else if(special.type==='holiday'){ cellStyle += 'background:#e0e0e0;'; }
+      if(special.type==='classOnPH'){ cellStyle += 'border:2px solid #8e24aa;'; }
+    }
+    var pills = specialPill + dayEvents.slice(0,3).map(function(b){return '<div class="dayPill" style="'+orgStyle(b.org)+'">'+escapeHtml(b.eventName)+'</div>';}).join('');
+    if(dayEvents.length>3){ pills += '<div style="font-size:9px;">+'+(dayEvents.length-3)+'</div>'; }
+    var tooltip = '';
+    if(dayEvents.length>0 || special){
+      var specialLabel = '';
+      if(special){
+        specialLabel = '<div style="margin-top:4px;">'+SPECIAL_TYPE_LABEL[special.type]+(special.label?('：'+escapeHtml(special.label)):'')+'</div>';
+      }
+      tooltip = '<div class="dayTooltip"><b>'+ds+'</b>' + specialLabel + '<br>' + dayEvents.map(function(b){
+        return '<div style="margin-top:4px;padding:3px 5px;border-radius:4px;'+orgStyle(b.org)+'">'+b.start+'-'+b.end+' '+escapeHtml(b.eventName)+(b.space?(' · '+escapeHtml(stripSpacePrefix(b.space))):'')+'</div>';
+      }).join('') + '</div>';
+    }
+    html += '<div class="dayCell" data-date="'+ds+'" style="'+cellStyle+'">'
+      + '<div class="dayCellInner"><span style="font-size:11px;'+dayNumStyle+'">'+d+'</span>'+pills+'</div>'
+      + tooltip
+      + '</div>';
+  }
+  grid.innerHTML = html;
+  var cells = grid.querySelectorAll('.dayCell');
+  for(var c=0;c<cells.length;c++){
+    cells[c].addEventListener('click', function(){ selectedDay = this.getAttribute('data-date'); renderDayDetail(); });
+  }
+}
+
+function setSpaceCheckboxesFor(spaceValue){
+  var checks = document.querySelectorAll('.spaceCheck');
+  var matched = false;
+  for(var i=0;i<checks.length;i++){
+    checks[i].checked = (spaceValue === checks[i].value);
+    if(checks[i].checked) matched = true;
+  }
+  var customToggle = document.getElementById('spaceCheckCustomToggle');
+  var customText = document.getElementById('spaceCheckCustomText');
+  if(!matched && spaceValue && spaceValue.indexOf('其他-')===0 && spaceValue !== '其他-线上'){
+    customToggle.checked = true;
+    customText.value = spaceValue.slice(3);
+  } else {
+    customToggle.checked = false;
+    customText.value = '';
+  }
+}
+
+function fillFormForEdit(b){
+  editingId = b.id;
+  editingSeriesId = null;
+  document.getElementById('org').value = b.org;
+  setSpaceCheckboxesFor(b.space);
+  document.getElementById('organizerName').value = b.organizerName || '';
+  document.getElementById('eventName').value = b.eventName;
+  document.getElementById('eventDate').value = b.date;
+  document.getElementById('eventDateEnd').value = '';
+  document.getElementById('startTime').value = b.start;
+  document.getElementById('endTime').value = b.end;
+  document.getElementById('notes').value = b.notes || '';
+  document.getElementById('needRsvp').checked = !!b.needRsvp;
+  document.getElementById('showInUpdates').checked = (b.showInUpdates !== false);
+  document.getElementById('recurring').value = 'none';
+  document.getElementById('recurUntilBox').style.display = 'none';
+  document.getElementById('customDatesBox').style.display = 'none';
+  document.getElementById('formTitle').textContent = b.seriesId ? '编辑活动（仅此场）' : '编辑活动';
+  document.getElementById('submitBtnLabel').textContent = '更新此活动';
+  document.getElementById('cancelEditBtn').style.display = 'inline-block';
+  document.getElementById('conflictWarning').style.display = 'none';
+}
+function resetForm(){
+  editingId = null;
+  editingSeriesId = null;
+  document.getElementById('eventName').value = '';
+  document.getElementById('organizerName').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('needRsvp').checked = false;
+  document.getElementById('showInUpdates').checked = true;
+  document.getElementById('recurring').value = 'none';
+  document.getElementById('recurUntilBox').style.display = 'none';
+  document.getElementById('customDatesBox').style.display = 'none';
+  document.getElementById('eventDateEnd').value = '';
+  var checks = document.querySelectorAll('.spaceCheck');
+  for(var i=0;i<checks.length;i++){ checks[i].checked = false; }
+  var customToggle = document.getElementById('spaceCheckCustomToggle');
+  if(customToggle){ customToggle.checked = false; }
+  var customText = document.getElementById('spaceCheckCustomText');
+  if(customText){ customText.value = ''; }
+  customDates = []; renderCustomChips();
+  document.getElementById('formTitle').textContent = '新增活动 / 预订';
+  document.getElementById('submitBtnLabel').textContent = '提交';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+}
+
+function renderDayDetail(){
+  var box = document.getElementById('dayDetail');
+  if(!selectedDay){ box.style.display='none'; return; }
+  var dayEvents = visibleBookings().filter(function(b){return b.date===selectedDay;}).sort(function(a,b){return a.start.localeCompare(b.start);});
+  var special = getSpecial(selectedDay);
+  box.style.display = 'block';
+  var html = '<b>'+selectedDay+'</b>';
+
+  if(special){
+    html += '<div style="margin-top:8px;background:#fffde7;border-radius:var(--radius);padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+      + '<div>'+SPECIAL_TYPE_LABEL[special.type]+(special.label?('：'+escapeHtml(special.label)):'')+'</div>'
+      + '<div style="display:flex;gap:4px;flex-shrink:0;"><button class="editSpecialInline" aria-label="编辑">✎</button><button class="delSpecialInline" aria-label="删除">🗑</button></div>'
+      + '</div>';
+  }
+
+  if(dayEvents.length===0 && !special){
+    html += '<div style="margin-top:8px;color:var(--text-muted);">没有活动。</div>';
+    box.innerHTML = html;
+    return;
+  }
+
+  if(dayEvents.length>0){
+    html += '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">' +
+      dayEvents.map(function(b){
+        return '<div style="'+orgStyle(b.org)+'border-radius:var(--radius);padding:8px 10px;">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+          +'<div><div style="font-weight:500;">'+escapeHtml(b.eventName)+(b.seriesId?' <span style="font-size:10px;">(系列)</span>':'')+'</div>'
+          +'<div style="font-size:11px;">'+b.start+'-'+b.end+' · '+escapeHtml(orgLabel(b.org))+(b.space?(' · '+escapeHtml(b.space)):' · 行政活动')+(b.organizerName?(' · 负责人：'+escapeHtml(b.organizerName)):'')+(b.notes?(' · '+escapeHtml(b.notes)):'')+'</div></div>'
+          +'<div style="display:flex;gap:4px;flex-shrink:0;">'
+          +'<button data-id="'+b.id+'" class="editBtn" aria-label="编辑">✎</button>'
+          +'<button data-id="'+b.id+'" class="delBtn" aria-label="删除">🗑</button>'
+          +'</div></div>'
+          +'<a href="'+gcalUrl(b)+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;text-decoration:underline;color:inherit;">+ 加入我的Google日历</a>'
+          +'</div>';
+      }).join('') + '</div>';
+  }
+  box.innerHTML = html;
+
+  if(special){
+    box.querySelector('.editSpecialInline').addEventListener('click', function(){
+      document.getElementById('specialType').value = special.type;
+      document.getElementById('specialDateStart').value = special.date;
+      document.getElementById('specialDateEnd').value = '';
+      document.getElementById('specialLabel').value = special.label || '';
+      document.getElementById('specialLabel').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+    box.querySelector('.delSpecialInline').addEventListener('click', function(){
+      showPasswordModal(function(){
+        specialDates = specialDates.filter(function(s){return s.date!==selectedDay;});
+        showToast('已删除标记');
+        renderCalendar(); renderDayDetail(); renderBigEventList();
+        saveSpecialDates();
+      });
+    });
+  }
+
+  var editBtns = box.querySelectorAll('.editBtn');
+  for(var i=0;i<editBtns.length;i++){
+    editBtns[i].addEventListener('click', function(){
+      var idAttr = this.getAttribute('data-id');
+      showPasswordModal(function(){
+        var b = null;
+        for(var k=0;k<bookings.length;k++){ if(String(bookings[k].id)===idAttr){ b=bookings[k]; break; } }
+        if(!b) return;
+        if(b.seriesId){
+          var whole = confirm('这是重复性活动的一部分。\n按「确定」修改整个系列（所有场次套用同样的名称/时间/组织等设定，日期与空间不变）。\n按「取消」只修改这一场。');
+          if(whole){ editingSeriesId = b.seriesId; }
+        }
+        fillFormForEdit(b);
+        if(editingSeriesId){ document.getElementById('formTitle').textContent = '编辑整个系列（'+bookings.filter(function(x){return x.seriesId===editingSeriesId;}).length+'场）'; }
+      });
+    });
+  }
+  var delBtns = box.querySelectorAll('.delBtn');
+  for(var j=0;j<delBtns.length;j++){
+    delBtns[j].addEventListener('click', function(){
+      var idAttr = this.getAttribute('data-id');
+      showPasswordModal(function(){
+        var target = null;
+        for(var k=0;k<bookings.length;k++){ if(String(bookings[k].id)===idAttr){ target=bookings[k]; break; } }
+        if(!target) return;
+        if(target.seriesId){
+          var whole = confirm('这是重复性活动的一部分。\n按「确定」删除整个系列（全部场次）。\n按「取消」只删除这一场。');
+          if(whole){ bookings = bookings.filter(function(b){return b.seriesId!==target.seriesId;}); }
+          else { bookings = bookings.filter(function(b){return String(b.id)!==idAttr;}); }
+        } else {
+          bookings = bookings.filter(function(b){return String(b.id)!==idAttr;});
+        }
+        showToast('活动已删除');
+        renderCalendar(); renderDayDetail(); renderRsvpList();
+        saveBookings();
+      });
+    });
+  }
+  box.classList.remove('highlightFlash');
+  void box.offsetWidth;
+  box.classList.add('highlightFlash');
+}
+
+function groupForList(list){
+  var map = {};
+  var order = [];
+  for(var i=0;i<list.length;i++){
+    var b = list[i];
+    var key = b.seriesId ? ('s'+b.seriesId) : ('single'+b.id);
+    if(!map[key]){ map[key] = []; order.push(key); }
+    map[key].push(b);
+  }
+  var result = [];
+  for(var j=0;j<order.length;j++){
+    var arr = map[order[j]];
+    result.push({rep: arr[0], count: arr.length});
+  }
+  return result;
+}
+
+function buildEventCard(rep, isPast, count){
+  var b = rep;
+  var attendees = b.attendees || [];
+  var going = attendees.filter(function(a){return a.response==='去';}).length;
+  var notGoing = attendees.filter(function(a){return a.response==='不去';}).length;
+  var isOpen = expandedId === b.id;
+
+  var card = '<div style="'+orgStyle(b.org)+'border-radius:12px;padding:12px;margin-bottom:10px;'+(isPast?'opacity:0.55;':'')+'">'
+    +'<button class="expandToggle" data-id="'+b.id+'" style="width:100%;text-align:left;background:transparent;border:none;padding:0;color:inherit;">'
+    +'<div style="font-weight:500;font-size:14px;display:flex;justify-content:space-between;align-items:center;">'
+    +'<span>'+escapeHtml(b.eventName)+(count>1?(' <span style="font-size:10px;font-weight:400;">（重复，共'+count+'场）</span>'):'')+'</span><span>'+(isOpen?'▲':'▼')+'</span></div>'
+    +'<div style="font-size:11px;margin-top:2px;">'+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</div>';
+  if(b.needRsvp){ card += '<div style="font-size:12px;margin-top:6px;">参加 '+going+' 人 · 不参加 '+notGoing+' 人</div>'; }
+  card += '</button>';
+
+  if(isOpen){
+    card += '<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid rgba(255,255,255,0.4);">';
+    if(b.organizerName){ card += '<div style="font-size:12px;margin-bottom:6px;">负责人：'+escapeHtml(b.organizerName)+'</div>'; }
+    if(b.notes){ card += '<div style="font-size:12px;margin-bottom:10px;">备注：'+escapeHtml(b.notes)+'</div>'; }
+    card += '<a href="'+gcalUrl(b)+'" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:11px;text-decoration:underline;color:inherit;">+ 加入我的Google日历</a>';
+
+    if(b.needRsvp){
+      card += '<div class="rsvpForm" data-id="'+b.id+'" style="background:rgba(255,255,255,0.85);color:#1a1a1a;border-radius:8px;padding:10px;margin-bottom:10px;">'
+        +'<div style="font-size:12px;font-weight:500;margin-bottom:6px;">登记出席</div>'
+        +'<input type="text" class="rName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
+        +'<input type="tel" class="rPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
+        +'<div style="display:flex;gap:8px;margin-bottom:6px;">'
+        +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="resp'+b.id+'" class="rResp" value="去" style="width:auto;">参加</label>'
+        +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="resp'+b.id+'" class="rResp" value="不去" style="width:auto;">不参加</label>'
+        +'</div>'
+        +'<input type="text" class="rRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
+        +'<button class="submitRsvp" data-id="'+b.id+'" style="width:100%;">提交</button>'
+        +'</div>';
+      if(attendees.length>0){ card += '<div style="font-size:11px;margin-bottom:8px;">'+attendees.map(function(a){return escapeHtml(a.name)+'（'+a.response+(a.remark?('：'+escapeHtml(a.remark)):'')+'）';}).join('、')+'</div>'; }
+      card += '<button class="copyBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:8px;">复制文字摘要'+(copyFeedbackId===b.id?'（已复制）':'')+'</button>';
+    }
+    card += '<button class="removeFromUpdatesBtn" data-id="'+b.id+'" style="width:100%;">从活动更新移除（需要密码）</button>';
+    card += '</div>';
+  }
+  card += '</div>';
+  return card;
+}
+
+function bindEventCardHandlers(container){
+  var expandBtns = container.querySelectorAll('.expandToggle');
+  for(var e=0;e<expandBtns.length;e++){
+    expandBtns[e].addEventListener('click', function(){
+      var id=Number(this.getAttribute('data-id'));
+      expandedId = expandedId===id?null:id; copyFeedbackId=null; renderRsvpList();
+    });
+  }
+  var submitRsvpBtns = container.querySelectorAll('.submitRsvp');
+  for(var sr=0; sr<submitRsvpBtns.length; sr++){
+    submitRsvpBtns[sr].addEventListener('click', function(ev){
+      ev.stopPropagation();
+      var id = Number(this.getAttribute('data-id'));
+      var formEl = container.querySelector('.rsvpForm[data-id="'+id+'"]');
+      var name = formEl.querySelector('.rName').value.trim();
+      var phone = formEl.querySelector('.rPhone').value.trim();
+      var remark = formEl.querySelector('.rRemark').value.trim();
+      var respEl = formEl.querySelector('.rResp:checked');
+      if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
+      var resp = respEl.value;
+      var booking = null;
+      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+      if(!booking) return;
+      if(!booking.attendees) booking.attendees = [];
+      var existing = null;
+      for(var m=0;m<booking.attendees.length;m++){ if(booking.attendees[m].name===name){ existing=booking.attendees[m]; break; } }
+      if(existing){ existing.response=resp; existing.phone=phone; existing.remark=remark; }
+      else booking.attendees.push({name:name, phone:phone, remark:remark, response:resp});
+      showToast('出席登记已提交');
+      renderRsvpList();
+      saveBookings();
+    });
+  }
+  var copyBtns = container.querySelectorAll('.copyBtn');
+  for(var cb=0; cb<copyBtns.length; cb++){
+    copyBtns[cb].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var booking = null;
+      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+      if(!booking) return;
+      copyText(buildSummary(booking)).then(function(){
+        copyFeedbackId = id; renderRsvpList();
+        setTimeout(function(){ copyFeedbackId=null; renderRsvpList(); }, 2000);
+      });
+    });
+  }
+  var removeBtns = container.querySelectorAll('.removeFromUpdatesBtn');
+  for(var rb=0; rb<removeBtns.length; rb++){
+    removeBtns[rb].addEventListener('click', function(){
+      var idAttr = this.getAttribute('data-id');
+      showPasswordModal(function(){
+        var id = Number(idAttr);
+        var booking = null;
+        for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+        if(!booking) return;
+        booking.showInUpdates = false;
+        showToast('已从活动更新移除');
+        renderRsvpList();
+        saveBookings();
+      });
+    });
+  }
+}
+
+function renderRsvpList(){
+  var container = document.getElementById('rsvpList');
+  var pastContainer = document.getElementById('pastList');
+  try{
+    var visible = bookings.filter(function(b){ return b.showInUpdates !== false; });
+    if(!visible || visible.length===0){
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">目前没有设定要显示的活动。</div>';
+      pastContainer.innerHTML = '';
+      return;
+    }
+    var today = todayStr();
+    var upcomingRaw = visible.filter(function(b){return b.date>=today;}).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+    var pastRaw = visible.filter(function(b){return b.date<today;}).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
+
+    var upcomingGroups = groupForList(upcomingRaw);
+    var pastGroups = groupForList(pastRaw);
+
+    container.innerHTML = upcomingGroups.length ? upcomingGroups.map(function(g){ return buildEventCard(g.rep, false, g.count); }).join('') : '<div style="color:var(--text-muted);font-size:13px;">目前没有即将到来的活动。</div>';
+    pastContainer.innerHTML = pastGroups.length ? pastGroups.map(function(g){ return buildEventCard(g.rep, true, g.count); }).join('') : '<div style="color:var(--text-muted);font-size:12px;">尚无过去的活动记录。</div>';
+
+    bindEventCardHandlers(container);
+    bindEventCardHandlers(pastContainer);
+  }catch(err){
+    container.innerHTML = '<div style="color:var(--text-danger);font-size:12px;">显示活动更新时发生错误：'+escapeHtml(String(err && err.message ? err.message : err))+'</div>';
+  }
+}
+
+function renderBigEventList(){
+  var box = document.getElementById('bigEventList');
+  var today = todayStr();
+  var list = specialDates.filter(function(s){ return s.type==='bigEvent' && s.date>=today; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
+  if(list.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">暂无即将到来的全校大活动。</div>'; return; }
+  box.innerHTML = list.map(function(s){
+    return '<button type="button" class="bigEventJump" data-date="'+s.date+'" style="width:100%;text-align:left;border:none;border-radius:10px;padding:10px 12px;margin-bottom:6px;background:#4fc3f7;color:#0d47a1;font-weight:600;cursor:pointer;">'
+      + s.date + ' · ' + escapeHtml(s.label || '全校大活动') + '</button>';
+  }).join('');
+  var btns = box.querySelectorAll('.bigEventJump');
+  for(var i=0;i<btns.length;i++){
+    btns[i].addEventListener('click', function(){
+      var ds = this.getAttribute('data-date');
+      viewDate = new Date(ds+'T00:00:00');
+      selectedDay = ds;
+      renderCalendar(); renderDayDetail();
+      var detailBox = document.getElementById('dayDetail');
+      if(detailBox && detailBox.scrollIntoView) detailBox.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  }
+}
+
+document.getElementById('addSpecialDate').addEventListener('click', function(){
+  var startDate = document.getElementById('specialDateStart').value;
+  var endDate = document.getElementById('specialDateEnd').value;
+  var type = document.getElementById('specialType').value;
+  var label = document.getElementById('specialLabel').value.trim();
+  if(!startDate){ alert('请选择开始日期'); return; }
+  var dates = [startDate];
+  if(type === 'holiday' && endDate && endDate > startDate){
+    dates = []; var cur = startDate;
+    while(cur <= endDate){ dates.push(cur); cur = addDays(cur, 1); }
+  }
+  showPasswordModal(function(){
+    for(var i=0;i<dates.length;i++){
+      specialDates = specialDates.filter(function(s){return s.date!==dates[i];});
+    }
+    for(var j=0;j<dates.length;j++){ specialDates.push({date:dates[j], type:type, label:label}); }
+    showToast('已标记 '+dates.length+' 天');
+    renderCalendar(); renderBigEventList();
+    document.getElementById('specialDateStart').value = '';
+    document.getElementById('specialDateEnd').value = '';
+    document.getElementById('specialLabel').value = '';
+    saveSpecialDates();
+  });
+});
+
+function renderCustomChips(){
+  var box = document.getElementById('customDateChips');
+  var html = '';
+  for(var i=0;i<customDates.length;i++){
+    html += '<span class="dateChip">'+customDates[i]+' <button class="rmChip" data-idx="'+i+'" style="border:none;background:transparent;padding:0;" aria-label="移除">×</button></span>';
+  }
+  box.innerHTML = html;
+  var rmBtns = box.querySelectorAll('.rmChip');
+  for(var j=0;j<rmBtns.length;j++){
+    rmBtns[j].addEventListener('click', function(){
+      customDates.splice(Number(this.getAttribute('data-idx')),1);
+      renderCustomChips();
+    });
+  }
+}
+document.getElementById('addCustomDate').addEventListener('click', function(){
+  var v = document.getElementById('customDateInput').value;
+  if(v && customDates.indexOf(v)===-1){ customDates.push(v); customDates.sort(); renderCustomChips(); }
+});
+
+function renderSearch(){
+  var box = document.getElementById('searchResults');
+  var term = searchTerm.trim().toLowerCase();
+  if(!term){ box.style.display='none'; return; }
+  var results = bookings.filter(function(b){
+    return (b.eventName && b.eventName.toLowerCase().indexOf(term)!==-1) || (b.notes && b.notes.toLowerCase().indexOf(term)!==-1);
+  }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  box.style.display = 'block';
+  if(results.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">没有符合「'+escapeHtml(searchTerm)+'」的活动。</div>'; return; }
+  box.innerHTML = '<div style="font-size:13px;font-weight:500;margin-bottom:8px;">搜寻结果（'+results.length+'）· 点击可跳转</div>' +
+    results.map(function(b){
+      return '<button type="button" class="searchResultItem" data-id="'+b.id+'" style="'+orgStyle(b.org)+'width:100%;text-align:left;border:none;border-radius:var(--radius);padding:8px 10px;margin-bottom:6px;display:block;cursor:pointer;">'
+        +'<span style="font-weight:500;">'+escapeHtml(b.eventName)+'</span> <span style="font-size:11px;">— '+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</span></button>';
+    }).join('');
+  var items = box.querySelectorAll('.searchResultItem');
+  for(var i=0;i<items.length;i++){
+    items[i].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var b = null;
+      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ b=bookings[k]; break; } }
+      if(!b) return;
+      activeTab = "总览";
+      viewDate = new Date(b.date+'T00:00:00');
+      selectedDay = b.date;
+      searchTerm = '';
+      document.getElementById('searchInput').value = '';
+      renderTabs(); renderCalendar(); renderDayDetail(); renderSearch();
+      var detailBox = document.getElementById('dayDetail');
+      if(detailBox && detailBox.scrollIntoView) detailBox.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  }
+}
+
+document.getElementById('searchInput').addEventListener('input', function(e){ searchTerm = e.target.value; renderSearch(); });
+document.getElementById('searchInput').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); } });
+document.getElementById('recurring').addEventListener('change', function(e){
+  document.getElementById('recurUntilBox').style.display = e.target.value==='weekly' ? 'block' : 'none';
+  document.getElementById('customDatesBox').style.display = e.target.value==='custom' ? 'block' : 'none';
+});
+document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
+document.getElementById('prevMonth').addEventListener('click', function(){ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1); renderCalendar(); });
+document.getElementById('nextMonth').addEventListener('click', function(){ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1); renderCalendar(); });
+
+document.getElementById('submitBtn').addEventListener('click', function(){
+  var org = document.getElementById('org').value;
+  var organizerName = document.getElementById('organizerName').value.trim();
+  var selectedSpaces = [];
+  var checks = document.querySelectorAll('.spaceCheck:checked');
+  for(var sc=0; sc<checks.length; sc++){ selectedSpaces.push(checks[sc].value); }
+  var customToggle = document.getElementById('spaceCheckCustomToggle');
+  var customText = document.getElementById('spaceCheckCustomText').value.trim();
+  if(customToggle && customToggle.checked && customText){ selectedSpaces.push('其他-' + customText); }
+
+  var eventName = document.getElementById('eventName').value.trim();
+  var date = document.getElementById('eventDate').value;
+  var dateEnd = document.getElementById('eventDateEnd').value;
+  var start = document.getElementById('startTime').value;
+  var end = document.getElementById('endTime').value;
+  var notes = document.getElementById('notes').value.trim();
+  var needRsvp = document.getElementById('needRsvp').checked;
+  var showInUpdates = document.getElementById('showInUpdates').checked;
+  var recurring = document.getElementById('recurring').value;
+  var recurUntil = document.getElementById('recurUntil').value;
+  var warnBox = document.getElementById('conflictWarning');
+  warnBox.style.display = 'none';
+
+  if(!eventName || !date || !start || !end){ warnBox.textContent = '请填写活动名称、日期、开始与结束时间。'; warnBox.style.display='block'; return; }
+  if(toMinutes(start) >= toMinutes(end)){ warnBox.textContent = '结束时间必须晚于开始时间。'; warnBox.style.display='block'; return; }
+  if(recurring === 'custom' && customDates.length===0){ warnBox.textContent = '你选了「自选日期」但还没加入任何日期，请先在日期栏选好后按"+ 加入"，或改选其他重复方式。'; warnBox.style.display='block'; return; }
+
+  if(editingId){
+    var idx = -1;
+    for(var k=0;k<bookings.length;k++){ if(bookings[k].id===editingId){ idx=k; break; } }
+    if(idx===-1){ resetForm(); return; }
+    var space0 = selectedSpaces.length ? selectedSpaces[0] : '';
+
+    if(editingSeriesId){
+      var updatedCount = 0;
+      for(var si=0; si<bookings.length; si++){
+        if(bookings[si].seriesId === editingSeriesId){
+          bookings[si] = Object.assign({}, bookings[si], {org:org, organizerName:organizerName, eventName:eventName, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates});
+          updatedCount++;
+        }
+      }
+      showToast('已更新整个系列（'+updatedCount+'场）');
+      resetForm();
+      renderCalendar(); renderRsvpList(); renderDayDetail();
+      saveBookings();
+      return;
+    }
+
+    var candidate = Object.assign({}, bookings[idx], {org:org, space:space0, organizerName:organizerName, eventName:eventName, date:date, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates});
+    if(space0){
+      var conflict = null;
+      for(var i2=0;i2<bookings.length;i2++){
+        if(bookings[i2].id!==editingId && overlaps(bookings[i2], candidate)){ conflict = bookings[i2]; break; }
+      }
+      if(conflict){
+        warnBox.innerHTML = '冲突：<b>'+escapeHtml(conflict.space)+'</b> 在 '+conflict.date+' '+conflict.start+'-'+conflict.end+' 已被 <b>'+escapeHtml(orgLabel(conflict.org))+'</b> 预订「'+escapeHtml(conflict.eventName)+'」。';
+        warnBox.style.display='block'; return;
+      }
+    }
+    bookings[idx] = candidate;
+    showToast('活动已更新');
+    resetForm();
+    viewDate = new Date(date+'T00:00:00');
+    renderCalendar(); renderRsvpList(); renderDayDetail();
+    saveBookings();
+    return;
+  }
+
+  var dates;
+  if(dateEnd && dateEnd > date){
+    dates = []; var curC = date;
+    while(curC <= dateEnd){ dates.push(curC); curC = addDays(curC, 1); }
+  } else {
+    dates = [date];
+    if(recurring === 'weekly' && recurUntil && recurUntil >= date){
+      dates = []; var cur = date;
+      while(cur <= recurUntil){ dates.push(cur); cur = addDays(cur, 7); }
+    } else if(recurring === 'custom'){
+      dates = customDates.slice();
+    }
+  }
+  var spacesToUse = selectedSpaces.length ? selectedSpaces : [''];
+  var seriesId = (dates.length>1 || spacesToUse.length>1) ? Date.now() : null;
+  var newEntries = [];
+  for(var di=0; di<dates.length; di++){
+    for(var spi=0; spi<spacesToUse.length; spi++){
+      newEntries.push({org:org, space:spacesToUse[spi], organizerName:organizerName, eventName:eventName, date:dates[di], start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates, attendees:[], seriesId:seriesId});
+    }
+  }
+
+  for(var ni=0; ni<newEntries.length; ni++){
+    var cand = newEntries[ni];
+    if(cand.space){
+      var conf = null;
+      for(var bi=0;bi<bookings.length;bi++){ if(overlaps(bookings[bi], cand)){ conf=bookings[bi]; break; } }
+      if(conf){
+        warnBox.innerHTML = '冲突：<b>'+escapeHtml(conf.space)+'</b> 在 '+conf.date+' '+conf.start+'-'+conf.end+' 已被 <b>'+escapeHtml(orgLabel(conf.org))+'</b> 预订「'+escapeHtml(conf.eventName)+'」，本次批次已取消，请调整后重试。';
+        warnBox.style.display='block'; return;
+      }
+    }
+  }
+  for(var ei=0; ei<newEntries.length; ei++){ newEntries[ei].id = Date.now() + Math.floor(Math.random()*100000) + ei; bookings.push(newEntries[ei]); }
+  showToast('活动已新增（共'+newEntries.length+'笔）');
+  resetForm();
+  viewDate = new Date(date+'T00:00:00');
+  renderCalendar(); renderRsvpList();
+  saveBookings();
+});
+
+loadBookings();
+
+} catch(topErr){
+  document.getElementById('loadStatus').textContent = '系统初始化错误：'+(topErr && topErr.message ? topErr.message : String(topErr));
+}
+</script>
+</div>
+</body>
+</html>
