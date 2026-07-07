@@ -219,6 +219,18 @@ a { color: inherit; }
   <button id="addSpecialDate" style="width:100%;">标记 / 更新</button>
 </div>
 
+<div style="margin-bottom:1rem;">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
+    <label style="flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface-1);font-size:13px;">
+      还原备份
+      <input type="file" id="importFile" accept="application/json" style="display:none;">
+    </label>
+  </div>
+  <div id="backupStatus" style="font-size:11px;color:var(--text-muted);">建议定期下载备份，存在自己的电脑或云端硬盘里。</div>
+</div>
+
 </div>
 
 <div style="min-width:0;">
@@ -1091,6 +1103,47 @@ document.getElementById('submitBtn').addEventListener('click', function(){
   viewDate = new Date(date+'T00:00:00');
   renderCalendar(); renderRsvpList();
   saveBookings();
+});
+
+document.getElementById('exportBtn').addEventListener('click', function(){
+  showPasswordModal(function(){
+    var payload = { exportedAt: new Date().toISOString(), bookings: bookings, specialDates: specialDates };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'puyuan_backup_' + todayStr() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 下载备份。';
+    showToast('备份文件已下载');
+  });
+});
+
+document.getElementById('importFile').addEventListener('change', function(e){
+  var file = e.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(evt){
+    var data;
+    try{ data = JSON.parse(evt.target.result); }catch(err){ alert('文件格式错误，无法读取，请确认这是本系统下载的备份档。'); return; }
+    if(!data || !Array.isArray(data.bookings)){ alert('这不是有效的备份文件。'); return; }
+    showPasswordModal(function(){
+      var ok = confirm('还原备份会覆盖目前所有资料。\n目前活动：'+bookings.length+' 笔\n备份档活动：'+data.bookings.length+' 笔（备份时间：'+(data.exportedAt||'未知')+'）\n\n确定要用备份档覆盖目前的资料吗？');
+      if(!ok){ return; }
+      bookings = data.bookings || [];
+      specialDates = data.specialDates || [];
+      Promise.all([saveBookings(), saveSpecialDates()]).then(function(){
+        showToast('已还原备份');
+        document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 还原备份。';
+        renderAll();
+      });
+    });
+  };
+  reader.readAsText(file);
+  e.target.value = '';
 });
 
 loadBookings();
