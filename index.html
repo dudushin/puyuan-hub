@@ -124,7 +124,7 @@ a { color: inherit; }
     <div>
       <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px;">组织</label>
       <select id="org" style="width:100%;">
-        <option value="学校行政">教师团 Teacher Team</option>
+        <option value="学校行政">教师团 COT</option>
         <option value="爸爸团">爸爸团 BOT</option>
         <option value="妈妈团">妈妈团 Sister Group</option>
         <option value="幼儿园">幼儿园 Kindy</option>
@@ -219,18 +219,6 @@ a { color: inherit; }
   <button id="addSpecialDate" style="width:100%;">标记 / 更新</button>
 </div>
 
-<div style="margin-bottom:1rem;">
-  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
-  <div style="display:flex;gap:8px;margin-bottom:8px;">
-    <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
-    <label style="flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface-1);font-size:13px;">
-      还原备份
-      <input type="file" id="importFile" accept="application/json" style="display:none;">
-    </label>
-  </div>
-  <div id="backupStatus" style="font-size:11px;color:var(--text-muted);">建议定期下载备份，存在自己的电脑或云端硬盘里。</div>
-</div>
-
 </div>
 
 <div style="min-width:0;">
@@ -248,6 +236,19 @@ a { color: inherit; }
 </div>
 
 </div>
+
+<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
+    <label style="flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface-1);font-size:13px;">
+      还原备份
+      <input type="file" id="importFile" accept="application/json" style="display:none;">
+    </label>
+  </div>
+  <div id="backupStatus" style="font-size:11px;color:var(--text-muted);">建议定期下载备份，存在自己的电脑或云端硬盘里。</div>
+</div>
+
 </div>
 
 <script>
@@ -286,7 +287,7 @@ function storageSet(key, value){
 // ====== 以上是资料储存部分 ======
 
 var ORGS = [
-  {v:"学校行政", en:"Teacher Team"},
+  {v:"学校行政", en:"COT"},
   {v:"爸爸团", en:"BOT"},
   {v:"妈妈团", en:"Sister Group"},
   {v:"幼儿园", en:"Kindy"},
@@ -873,10 +874,12 @@ function renderRsvpList(){
     var pastRaw = visible.filter(function(b){return b.date<today;}).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
 
     var upcomingGroups = groupForList(upcomingRaw);
-    var pastGroups = groupForList(pastRaw);
+    var pastGroupsAll = groupForList(pastRaw);
+    var pastGroups = pastGroupsAll.slice(0, 5);
 
     container.innerHTML = upcomingGroups.length ? upcomingGroups.map(function(g){ return buildEventCard(g.rep, false, g.count); }).join('') : '<div style="color:var(--text-muted);font-size:13px;">目前没有即将到来的活动。</div>';
     pastContainer.innerHTML = pastGroups.length ? pastGroups.map(function(g){ return buildEventCard(g.rep, true, g.count); }).join('') : '<div style="color:var(--text-muted);font-size:12px;">尚无过去的活动记录。</div>';
+    if(pastGroupsAll.length > 5){ pastContainer.innerHTML += '<div style="color:var(--text-muted);font-size:11px;margin-top:4px;">只显示最近5笔，共'+pastGroupsAll.length+'笔。</div>'; }
 
     bindEventCardHandlers(container);
     bindEventCardHandlers(pastContainer);
@@ -957,7 +960,11 @@ function renderSearch(){
   var term = searchTerm.trim().toLowerCase();
   if(!term){ box.style.display='none'; return; }
   var results = bookings.filter(function(b){
-    return (b.eventName && b.eventName.toLowerCase().indexOf(term)!==-1) || (b.notes && b.notes.toLowerCase().indexOf(term)!==-1);
+    return (b.eventName && b.eventName.toLowerCase().indexOf(term)!==-1)
+      || (b.notes && b.notes.toLowerCase().indexOf(term)!==-1)
+      || (b.space && (b.space.toLowerCase().indexOf(term)!==-1 || stripSpacePrefix(b.space).toLowerCase().indexOf(term)!==-1))
+      || (b.org && b.org.toLowerCase().indexOf(term)!==-1)
+      || (orgLabel(b.org) && orgLabel(b.org).toLowerCase().indexOf(term)!==-1);
   }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
   box.style.display = 'block';
   if(results.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">没有符合「'+escapeHtml(searchTerm)+'」的活动。</div>'; return; }
@@ -1152,6 +1159,5 @@ loadBookings();
   document.getElementById('loadStatus').textContent = '系统初始化错误：'+(topErr && topErr.message ? topErr.message : String(topErr));
 }
 </script>
-</div>
 </body>
 </html>
