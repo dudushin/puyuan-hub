@@ -77,7 +77,7 @@ a { color: inherit; }
 
 <div id="pwModal" class="pwOverlay" style="display:none;">
   <div class="pwBox">
-    <div style="font-weight:500;margin-bottom:10px;">请输入管理密码</div>
+    <div id="pwModalTitle" style="font-weight:500;margin-bottom:10px;">请输入管理密码</div>
     <input type="password" id="pwInput" placeholder="密码" style="width:100%;margin-bottom:8px;">
     <div id="pwError" style="color:var(--text-danger);font-size:12px;margin-bottom:8px;display:none;">密码错误，请重试。</div>
     <div style="display:flex;gap:8px;">
@@ -241,10 +241,8 @@ a { color: inherit; }
   <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
   <div style="display:flex;gap:8px;margin-bottom:8px;">
     <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
-    <label style="flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface-1);font-size:13px;">
-      还原备份
-      <input type="file" id="importFile" accept="application/json" style="display:none;">
-    </label>
+    <button id="importBtn" type="button" style="flex:1;">还原备份</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
   </div>
   <div id="backupStatus" style="font-size:11px;color:var(--text-muted);">建议定期下载备份，存在自己的电脑或云端硬盘里。</div>
 </div>
@@ -332,7 +330,9 @@ var editingId = null;
 var editingSeriesId = null;
 var searchTerm = '';
 var adminPassword = 'pl123';
+var backupPassword = 'pl888';
 var pendingAction = null;
+var pendingPassword = null;
 
 function toMinutes(t){ var parts = t.split(":"); return parseInt(parts[0],10)*60+parseInt(parts[1],10); }
 function overlaps(a,b){
@@ -364,8 +364,10 @@ function showToast(msg){
   setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 2200);
 }
 
-function showPasswordModal(action){
+function showPasswordModal(action, requiredPassword){
   pendingAction = action;
+  pendingPassword = requiredPassword || adminPassword;
+  document.getElementById('pwModalTitle').textContent = (pendingPassword === backupPassword) ? '请输入备份/还原密码' : '请输入管理密码';
   document.getElementById('pwInput').value = '';
   document.getElementById('pwError').style.display = 'none';
   document.getElementById('pwModal').style.display = 'flex';
@@ -373,9 +375,9 @@ function showPasswordModal(action){
 }
 document.getElementById('pwConfirm').addEventListener('click', function(){
   var val = document.getElementById('pwInput').value;
-  if(val === adminPassword){
+  if(val === pendingPassword){
     document.getElementById('pwModal').style.display = 'none';
-    var act = pendingAction; pendingAction = null;
+    var act = pendingAction; pendingAction = null; pendingPassword = null;
     if(act) act();
   } else {
     document.getElementById('pwError').style.display = 'block';
@@ -383,7 +385,7 @@ document.getElementById('pwConfirm').addEventListener('click', function(){
 });
 document.getElementById('pwCancel').addEventListener('click', function(){
   document.getElementById('pwModal').style.display = 'none';
-  pendingAction = null;
+  pendingAction = null; pendingPassword = null;
 });
 document.getElementById('pwInput').addEventListener('keydown', function(e){
   if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('pwConfirm').click(); }
@@ -1126,7 +1128,13 @@ document.getElementById('exportBtn').addEventListener('click', function(){
     URL.revokeObjectURL(url);
     document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 下载备份。';
     showToast('备份文件已下载');
-  });
+  }, backupPassword);
+});
+
+document.getElementById('importBtn').addEventListener('click', function(){
+  showPasswordModal(function(){
+    document.getElementById('importFile').click();
+  }, backupPassword);
 });
 
 document.getElementById('importFile').addEventListener('change', function(e){
@@ -1137,16 +1145,14 @@ document.getElementById('importFile').addEventListener('change', function(e){
     var data;
     try{ data = JSON.parse(evt.target.result); }catch(err){ alert('文件格式错误，无法读取，请确认这是本系统下载的备份档。'); return; }
     if(!data || !Array.isArray(data.bookings)){ alert('这不是有效的备份文件。'); return; }
-    showPasswordModal(function(){
-      var ok = confirm('还原备份会覆盖目前所有资料。\n目前活动：'+bookings.length+' 笔\n备份档活动：'+data.bookings.length+' 笔（备份时间：'+(data.exportedAt||'未知')+'）\n\n确定要用备份档覆盖目前的资料吗？');
-      if(!ok){ return; }
-      bookings = data.bookings || [];
-      specialDates = data.specialDates || [];
-      Promise.all([saveBookings(), saveSpecialDates()]).then(function(){
-        showToast('已还原备份');
-        document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 还原备份。';
-        renderAll();
-      });
+    var ok = confirm('还原备份会覆盖目前所有资料。\n目前活动：'+bookings.length+' 笔\n备份档活动：'+data.bookings.length+' 笔（备份时间：'+(data.exportedAt||'未知')+'）\n\n确定要用备份档覆盖目前的资料吗？');
+    if(!ok){ return; }
+    bookings = data.bookings || [];
+    specialDates = data.specialDates || [];
+    Promise.all([saveBookings(), saveSpecialDates()]).then(function(){
+      showToast('已还原备份');
+      document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 还原备份。';
+      renderAll();
     });
   };
   reader.readAsText(file);
