@@ -68,6 +68,19 @@ a { color: inherit; }
 .spaceCheckGrid { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; }
 .dateChip { display:inline-flex; align-items:center; gap:4px; background:var(--surface-1); border-radius:14px; padding:3px 8px; font-size:11px; margin:2px; }
 .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2e7d32; color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; z-index:2000; box-shadow:0 4px 16px rgba(0,0,0,0.25); }
+#printArea { display:none; }
+.printMonth { page-break-after: always; }
+.printGrid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:14px; }
+.printDayCell { border:0.5px solid #ccc; min-height:56px; padding:2px 3px; font-size:9px; }
+.printPill { font-size:8px; border-radius:2px; padding:1px 2px; margin-top:1px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.printTable { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:20px; }
+.printTable th, .printTable td { border:0.5px solid #ccc; padding:5px 6px; text-align:left; vertical-align:top; }
+.printTable th { background:#f0f0f0; }
+@media print {
+  body.printMode > *:not(#printArea) { display:none !important; }
+  #printArea { display:block !important; }
+  .printMonth:last-child { page-break-after: auto; }
+}
 </style>
 </head>
 <body>
@@ -238,6 +251,20 @@ a { color: inherit; }
 </div>
 
 <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">汇出月历 PDF</div>
+  <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+    <select id="pdfRange" style="flex:1;min-width:120px;">
+      <option value="1">本月</option>
+      <option value="3">未来3个月</option>
+      <option value="6">未来半年</option>
+      <option value="12">未来一年</option>
+    </select>
+    <button id="pdfExportBtn" style="flex:1;min-width:140px;">开始汇出</button>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);">会打开列印视窗，选「另存为PDF」即可存成PDF文件，内含月历图与活动详细清单。</div>
+</div>
+
+<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
   <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
   <div style="display:flex;gap:8px;margin-bottom:8px;">
     <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
@@ -249,40 +276,77 @@ a { color: inherit; }
 
 </div>
 
+<div id="printArea"></div>
+
 <script>
 try {
 
-// ====== Supabase 连接设定 ======
-var SUPABASE_URL = 'https://uykfqhawoscqjejamtyh.supabase.co';
-var SUPABASE_KEY = 'sb_publishable_cszjPx_JojpUp5YKOeTejA_2rmdlxdC';
-
-function sbHeaders(extra){
-  var h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
-  if(extra){ for(var k in extra){ h[k] = extra[k]; } }
-  return h;
-}
-function storageGet(key){
-  return fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key) + '&select=value', { headers: sbHeaders() })
-    .then(function(r){ if(!r.ok){ throw new Error('HTTP '+r.status); } return r.json(); })
-    .then(function(rows){ return (rows && rows.length) ? rows[0].value : null; });
-}
-function storageSet(key, value){
-  return fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key), {
-    method: 'PATCH',
-    headers: sbHeaders({'Prefer':'return=representation'}),
-    body: JSON.stringify({ value: value })
-  }).then(function(r){ return r.json(); }).then(function(rows){
-    if(!rows || rows.length === 0){
-      return fetch(SUPABASE_URL + '/rest/v1/app_data', {
-        method: 'POST',
-        headers: sbHeaders({'Prefer':'return=minimal'}),
-        body: JSON.stringify({ key: key, value: value })
-      }).then(function(r2){ if(!r2.ok){ throw new Error('HTTP '+r2.status); } return true; });
-    }
-    return true;
+// ====== 服务器端API（不再直接连Supabase，密码验证与写入都搬到服务器） ======
+function apiGetData(){
+  return fetch('/api/data').then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
   });
 }
-// ====== 以上是资料储存部分 ======
+function apiAddBookings(password, entries){
+  return fetch('/api/data', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({mode:'addBookings', password: password, entries: entries})
+  }).then(function(r){
+    if(r.status===401) return {ok:false, wrongPassword:true};
+    return r.json().then(function(j){
+      if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      return {ok:true, ids:j.ids};
+    });
+  });
+}
+function apiAdminWrite(password, key, value){
+  return fetch('/api/data', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({mode:'admin', password:password, key:key, value:value})
+  }).then(function(r){
+    if(r.status===401) return {ok:false, wrongPassword:true};
+    return r.json().then(function(j){
+      if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      return {ok:true};
+    });
+  });
+}
+function apiRsvp(bookingId, name, phone, remark, response){
+  return fetch('/api/rsvp', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({bookingId:bookingId, name:name, phone:phone, remark:remark, response:response})
+  }).then(function(r){
+    return r.json().then(function(j){
+      if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      return j;
+    });
+  });
+}
+function apiBackupExport(password){
+  return fetch('/api/backup', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'export', password:password})
+  }).then(function(r){
+    if(r.status===401) return {ok:false, wrongPassword:true};
+    return r.json().then(function(j){
+      if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      return {ok:true, data:j};
+    });
+  });
+}
+function apiBackupImport(password, bookingsData, specialDatesData){
+  return fetch('/api/backup', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'import', password:password, bookings:bookingsData, specialDates:specialDatesData})
+  }).then(function(r){
+    if(r.status===401) return {ok:false, wrongPassword:true};
+    return r.json().then(function(j){
+      if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      return {ok:true};
+    });
+  });
+}
 
 var ORGS = [
   {v:"学校行政", en:"COT"},
@@ -329,10 +393,7 @@ var copyFeedbackId = null;
 var editingId = null;
 var editingSeriesId = null;
 var searchTerm = '';
-var adminPassword = 'pl123';
-var backupPassword = 'pl888';
-var pendingAction = null;
-var pendingPassword = null;
+var pendingAction = null; // function(password) -> Promise<boolean>
 
 function toMinutes(t){ var parts = t.split(":"); return parseInt(parts[0],10)*60+parseInt(parts[1],10); }
 function overlaps(a,b){
@@ -364,31 +425,43 @@ function showToast(msg){
   setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 2200);
 }
 
-function showPasswordModal(action, requiredPassword){
+// action: function(password) -> Promise<boolean> (true = success/close modal, false = wrong password/keep open)
+function showPasswordModal(action, title){
   pendingAction = action;
-  pendingPassword = requiredPassword || adminPassword;
-  document.getElementById('pwModalTitle').textContent = (pendingPassword === backupPassword) ? '请输入备份/还原密码' : '请输入管理密码';
+  document.getElementById('pwModalTitle').textContent = title || '请输入管理密码';
   document.getElementById('pwInput').value = '';
   document.getElementById('pwError').style.display = 'none';
   document.getElementById('pwModal').style.display = 'flex';
   document.getElementById('pwInput').focus();
 }
-document.getElementById('pwConfirm').addEventListener('click', function(){
+function runPendingAction(){
   var val = document.getElementById('pwInput').value;
-  if(val === pendingPassword){
-    document.getElementById('pwModal').style.display = 'none';
-    var act = pendingAction; pendingAction = null; pendingPassword = null;
-    if(act) act();
-  } else {
+  var act = pendingAction;
+  if(!act) return;
+  var btn = document.getElementById('pwConfirm');
+  btn.disabled = true;
+  Promise.resolve(act(val)).then(function(ok){
+    btn.disabled = false;
+    if(ok){
+      document.getElementById('pwModal').style.display = 'none';
+      pendingAction = null;
+    } else {
+      document.getElementById('pwError').textContent = '密码错误，请重试。';
+      document.getElementById('pwError').style.display = 'block';
+    }
+  }).catch(function(err){
+    btn.disabled = false;
+    document.getElementById('pwError').textContent = '发生错误：'+(err && err.message ? err.message : err);
     document.getElementById('pwError').style.display = 'block';
-  }
-});
+  });
+}
+document.getElementById('pwConfirm').addEventListener('click', runPendingAction);
 document.getElementById('pwCancel').addEventListener('click', function(){
   document.getElementById('pwModal').style.display = 'none';
-  pendingAction = null; pendingPassword = null;
+  pendingAction = null;
 });
 document.getElementById('pwInput').addEventListener('keydown', function(e){
-  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('pwConfirm').click(); }
+  if(e.key === 'Enter'){ e.preventDefault(); runPendingAction(); }
 });
 
 function copyText(text){
@@ -498,25 +571,13 @@ function loadBookings(){
     document.getElementById('loadStatus').textContent = '初始绘制错误：'+(e0 && e0.message ? e0.message : String(e0));
   }
 
-  Promise.all([storageGet('bookings'), storageGet('specialDates')]).then(function(results){
-    bookings = results[0] || [];
-    specialDates = results[1] || [];
+  apiGetData().then(function(data){
+    bookings = data.bookings || [];
+    specialDates = data.specialDates || [];
     renderAll();
   }).catch(function(err){
-    document.getElementById('loadStatus').textContent = '载入资料错误（请确认Supabase网址/key与资料表是否正确）：'+(err && err.message ? err.message : String(err));
+    document.getElementById('loadStatus').textContent = '载入资料错误：'+(err && err.message ? err.message : String(err));
     renderAll();
-  });
-}
-function saveBookings(){
-  return storageSet('bookings', bookings).then(function(){
-    document.getElementById('debugCount').textContent = '目前储存的活动数：'+bookings.length+'笔（已同步）';
-  }).catch(function(err){
-    document.getElementById('debugCount').textContent = '储存错误：'+(err && err.message ? err.message : String(err));
-  });
-}
-function saveSpecialDates(){
-  return storageSet('specialDates', specialDates).catch(function(err){
-    document.getElementById('loadStatus').textContent = '假期资料储存错误：'+(err && err.message ? err.message : String(err));
   });
 }
 
@@ -610,7 +671,7 @@ function fillFormForEdit(b){
   document.getElementById('recurUntilBox').style.display = 'none';
   document.getElementById('customDatesBox').style.display = 'none';
   document.getElementById('formTitle').textContent = b.seriesId ? '编辑活动（仅此场）' : '编辑活动';
-  document.getElementById('submitBtnLabel').textContent = '更新此活动';
+  document.getElementById('submitBtnLabel').textContent = '更新此活动（需要密码）';
   document.getElementById('cancelEditBtn').style.display = 'inline-block';
   document.getElementById('conflictWarning').style.display = 'none';
 }
@@ -685,12 +746,16 @@ function renderDayDetail(){
       document.getElementById('specialLabel').scrollIntoView({behavior:'smooth', block:'center'});
     });
     box.querySelector('.delSpecialInline').addEventListener('click', function(){
-      showPasswordModal(function(){
-        specialDates = specialDates.filter(function(s){return s.date!==selectedDay;});
-        showToast('已删除标记');
-        renderCalendar(); renderDayDetail(); renderBigEventList();
-        saveSpecialDates();
-      });
+      showPasswordModal(function(password){
+        var newList = specialDates.filter(function(s){return s.date!==selectedDay;});
+        return apiAdminWrite(password, 'specialDates', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          specialDates = newList;
+          showToast('已删除标记');
+          renderCalendar(); renderDayDetail(); renderBigEventList();
+          return true;
+        });
+      }, '请输入假期密码');
     });
   }
 
@@ -698,38 +763,41 @@ function renderDayDetail(){
   for(var i=0;i<editBtns.length;i++){
     editBtns[i].addEventListener('click', function(){
       var idAttr = this.getAttribute('data-id');
-      showPasswordModal(function(){
-        var b = null;
-        for(var k=0;k<bookings.length;k++){ if(String(bookings[k].id)===idAttr){ b=bookings[k]; break; } }
-        if(!b) return;
-        if(b.seriesId){
-          var whole = confirm('这是重复性活动的一部分。\n按「确定」修改整个系列（所有场次套用同样的名称/时间/组织等设定，日期与空间不变）。\n按「取消」只修改这一场。');
-          if(whole){ editingSeriesId = b.seriesId; }
-        }
-        fillFormForEdit(b);
-        if(editingSeriesId){ document.getElementById('formTitle').textContent = '编辑整个系列（'+bookings.filter(function(x){return x.seriesId===editingSeriesId;}).length+'场）'; }
-      });
+      var b = null;
+      for(var k=0;k<bookings.length;k++){ if(String(bookings[k].id)===idAttr){ b=bookings[k]; break; } }
+      if(!b) return;
+      if(b.seriesId){
+        var whole = confirm('这是重复性活动的一部分。\n按「确定」修改整个系列（所有场次套用同样的名称/时间/组织等设定，日期与空间不变）。\n按「取消」只修改这一场。');
+        if(whole){ editingSeriesId = b.seriesId; }
+      }
+      fillFormForEdit(b);
+      if(editingSeriesId){ document.getElementById('formTitle').textContent = '编辑整个系列（'+bookings.filter(function(x){return x.seriesId===editingSeriesId;}).length+'场）'; }
+      document.getElementById('formTitle').scrollIntoView({behavior:'smooth', block:'center'});
     });
   }
   var delBtns = box.querySelectorAll('.delBtn');
   for(var j=0;j<delBtns.length;j++){
     delBtns[j].addEventListener('click', function(){
       var idAttr = this.getAttribute('data-id');
-      showPasswordModal(function(){
-        var target = null;
-        for(var k=0;k<bookings.length;k++){ if(String(bookings[k].id)===idAttr){ target=bookings[k]; break; } }
-        if(!target) return;
-        if(target.seriesId){
-          var whole = confirm('这是重复性活动的一部分。\n按「确定」删除整个系列（全部场次）。\n按「取消」只删除这一场。');
-          if(whole){ bookings = bookings.filter(function(b){return b.seriesId!==target.seriesId;}); }
-          else { bookings = bookings.filter(function(b){return String(b.id)!==idAttr;}); }
-        } else {
-          bookings = bookings.filter(function(b){return String(b.id)!==idAttr;});
-        }
-        showToast('活动已删除');
-        renderCalendar(); renderDayDetail(); renderRsvpList();
-        saveBookings();
-      });
+      var target = null;
+      for(var k=0;k<bookings.length;k++){ if(String(bookings[k].id)===idAttr){ target=bookings[k]; break; } }
+      if(!target) return;
+      var deleteWholeSeries = false;
+      if(target.seriesId){
+        deleteWholeSeries = confirm('这是重复性活动的一部分。\n按「确定」删除整个系列（全部场次）。\n按「取消」只删除这一场。');
+      }
+      showPasswordModal(function(password){
+        var newList = deleteWholeSeries
+          ? bookings.filter(function(b){return b.seriesId!==target.seriesId;})
+          : bookings.filter(function(b){return String(b.id)!==idAttr;});
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          bookings = newList;
+          showToast('活动已删除');
+          renderCalendar(); renderDayDetail(); renderRsvpList();
+          return true;
+        });
+      }, '请输入活动密码');
     });
   }
   box.classList.remove('highlightFlash');
@@ -817,17 +885,19 @@ function bindEventCardHandlers(container){
       var respEl = formEl.querySelector('.rResp:checked');
       if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
       var resp = respEl.value;
-      var booking = null;
-      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
-      if(!booking) return;
-      if(!booking.attendees) booking.attendees = [];
-      var existing = null;
-      for(var m=0;m<booking.attendees.length;m++){ if(booking.attendees[m].name===name){ existing=booking.attendees[m]; break; } }
-      if(existing){ existing.response=resp; existing.phone=phone; existing.remark=remark; }
-      else booking.attendees.push({name:name, phone:phone, remark:remark, response:resp});
-      showToast('出席登记已提交');
-      renderRsvpList();
-      saveBookings();
+      var btn = this;
+      btn.disabled = true;
+      apiRsvp(id, name, phone, remark, resp).then(function(res){
+        btn.disabled = false;
+        var booking = null;
+        for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+        if(booking) booking.attendees = res.attendees || booking.attendees;
+        showToast('出席登记已提交');
+        renderRsvpList();
+      }).catch(function(err){
+        btn.disabled = false;
+        alert('登记失败：'+(err && err.message ? err.message : err));
+      });
     });
   }
   var copyBtns = container.querySelectorAll('.copyBtn');
@@ -847,16 +917,20 @@ function bindEventCardHandlers(container){
   for(var rb=0; rb<removeBtns.length; rb++){
     removeBtns[rb].addEventListener('click', function(){
       var idAttr = this.getAttribute('data-id');
-      showPasswordModal(function(){
-        var id = Number(idAttr);
-        var booking = null;
-        for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
-        if(!booking) return;
-        booking.showInUpdates = false;
-        showToast('已从活动更新移除');
-        renderRsvpList();
-        saveBookings();
-      });
+      var id = Number(idAttr);
+      showPasswordModal(function(password){
+        var newList = bookings.map(function(b){
+          if(b.id===id) return Object.assign({}, b, {showInUpdates:false});
+          return b;
+        });
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          bookings = newList;
+          showToast('已从活动更新移除');
+          renderRsvpList();
+          return true;
+        });
+      }, '请输入活动密码');
     });
   }
 }
@@ -923,18 +997,20 @@ document.getElementById('addSpecialDate').addEventListener('click', function(){
     dates = []; var cur = startDate;
     while(cur <= endDate){ dates.push(cur); cur = addDays(cur, 1); }
   }
-  showPasswordModal(function(){
-    for(var i=0;i<dates.length;i++){
-      specialDates = specialDates.filter(function(s){return s.date!==dates[i];});
-    }
-    for(var j=0;j<dates.length;j++){ specialDates.push({date:dates[j], type:type, label:label}); }
-    showToast('已标记 '+dates.length+' 天');
-    renderCalendar(); renderBigEventList();
-    document.getElementById('specialDateStart').value = '';
-    document.getElementById('specialDateEnd').value = '';
-    document.getElementById('specialLabel').value = '';
-    saveSpecialDates();
-  });
+  showPasswordModal(function(password){
+    var newList = specialDates.filter(function(s){ return dates.indexOf(s.date)===-1; });
+    for(var j=0;j<dates.length;j++){ newList.push({date:dates[j], type:type, label:label}); }
+    return apiAdminWrite(password, 'specialDates', newList).then(function(res){
+      if(res.wrongPassword) return false;
+      specialDates = newList;
+      showToast('已标记 '+dates.length+' 天');
+      renderCalendar(); renderBigEventList();
+      document.getElementById('specialDateStart').value = '';
+      document.getElementById('specialDateEnd').value = '';
+      document.getElementById('specialLabel').value = '';
+      return true;
+    });
+  }, '请输入假期密码');
 });
 
 function renderCustomChips(){
@@ -961,16 +1037,18 @@ function renderSearch(){
   var box = document.getElementById('searchResults');
   var term = searchTerm.trim().toLowerCase();
   if(!term){ box.style.display='none'; return; }
-  var results = bookings.filter(function(b){
+  var allResults = bookings.filter(function(b){
     return (b.eventName && b.eventName.toLowerCase().indexOf(term)!==-1)
       || (b.notes && b.notes.toLowerCase().indexOf(term)!==-1)
       || (b.space && (b.space.toLowerCase().indexOf(term)!==-1 || stripSpacePrefix(b.space).toLowerCase().indexOf(term)!==-1))
       || (b.org && b.org.toLowerCase().indexOf(term)!==-1)
       || (orgLabel(b.org) && orgLabel(b.org).toLowerCase().indexOf(term)!==-1);
   }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  var PAGE_SIZE = 15;
+  var results = allResults.slice(0, PAGE_SIZE);
   box.style.display = 'block';
-  if(results.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">没有符合「'+escapeHtml(searchTerm)+'」的活动。</div>'; return; }
-  box.innerHTML = '<div style="font-size:13px;font-weight:500;margin-bottom:8px;">搜寻结果（'+results.length+'）· 点击可跳转</div>' +
+  if(allResults.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">没有符合「'+escapeHtml(searchTerm)+'」的活动。</div>'; return; }
+  box.innerHTML = '<div style="font-size:13px;font-weight:500;margin-bottom:8px;">搜寻结果（共'+allResults.length+'笔'+(allResults.length>PAGE_SIZE?('，只显示前'+PAGE_SIZE+'笔'):'')+'）· 点击可跳转</div>' +
     results.map(function(b){
       return '<button type="button" class="searchResultItem" data-id="'+b.id+'" style="'+orgStyle(b.org)+'width:100%;text-align:left;border:none;border-radius:var(--radius);padding:8px 10px;margin-bottom:6px;display:block;cursor:pointer;">'
         +'<span style="font-weight:500;">'+escapeHtml(b.eventName)+'</span> <span style="font-size:11px;">— '+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</span></button>';
@@ -995,7 +1073,6 @@ function renderSearch(){
 }
 
 document.getElementById('searchInput').addEventListener('input', function(e){ searchTerm = e.target.value; renderSearch(); });
-document.getElementById('searchInput').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); } });
 document.getElementById('recurring').addEventListener('change', function(e){
   document.getElementById('recurUntilBox').style.display = e.target.value==='weekly' ? 'block' : 'none';
   document.getElementById('customDatesBox').style.display = e.target.value==='custom' ? 'block' : 'none';
@@ -1030,7 +1107,9 @@ document.getElementById('submitBtn').addEventListener('click', function(){
 
   if(!eventName || !date || !start || !end){ warnBox.textContent = '请填写活动名称、日期、开始与结束时间。'; warnBox.style.display='block'; return; }
   if(toMinutes(start) >= toMinutes(end)){ warnBox.textContent = '结束时间必须晚于开始时间。'; warnBox.style.display='block'; return; }
-  if(recurring === 'custom' && customDates.length===0){ warnBox.textContent = '你选了「自选日期」但还没加入任何日期，请先在日期栏选好后按"+ 加入"，或改选其他重复方式。'; warnBox.style.display='block'; return; }
+  if(recurring === 'custom' && customDates.length===0 && !editingId){ warnBox.textContent = '你选了「自选日期」但还没加入任何日期，请先在日期栏选好后按"+ 加入"，或改选其他重复方式。'; warnBox.style.display='block'; return; }
+
+  var submitBtn = document.getElementById('submitBtn');
 
   if(editingId){
     var idx = -1;
@@ -1039,17 +1118,23 @@ document.getElementById('submitBtn').addEventListener('click', function(){
     var space0 = selectedSpaces.length ? selectedSpaces[0] : '';
 
     if(editingSeriesId){
-      var updatedCount = 0;
-      for(var si=0; si<bookings.length; si++){
-        if(bookings[si].seriesId === editingSeriesId){
-          bookings[si] = Object.assign({}, bookings[si], {org:org, organizerName:organizerName, eventName:eventName, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates});
-          updatedCount++;
-        }
-      }
-      showToast('已更新整个系列（'+updatedCount+'场）');
-      resetForm();
-      renderCalendar(); renderRsvpList(); renderDayDetail();
-      saveBookings();
+      var seriesIdCapture = editingSeriesId;
+      showPasswordModal(function(password){
+        var newList = bookings.map(function(bk){
+          if(bk.seriesId === seriesIdCapture){
+            return Object.assign({}, bk, {org:org, organizerName:organizerName, eventName:eventName, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates});
+          }
+          return bk;
+        });
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          bookings = newList;
+          showToast('已更新整个系列');
+          resetForm();
+          renderCalendar(); renderRsvpList(); renderDayDetail();
+          return true;
+        });
+      }, '请输入活动密码（修改整个系列）');
       return;
     }
 
@@ -1064,15 +1149,23 @@ document.getElementById('submitBtn').addEventListener('click', function(){
         warnBox.style.display='block'; return;
       }
     }
-    bookings[idx] = candidate;
-    showToast('活动已更新');
-    resetForm();
-    viewDate = new Date(date+'T00:00:00');
-    renderCalendar(); renderRsvpList(); renderDayDetail();
-    saveBookings();
+    var editIdCapture = editingId;
+    showPasswordModal(function(password){
+      var newList = bookings.map(function(bk){ return bk.id===editIdCapture ? candidate : bk; });
+      return apiAdminWrite(password, 'bookings', newList).then(function(res){
+        if(res.wrongPassword) return false;
+        bookings = newList;
+        showToast('活动已更新');
+        resetForm();
+        viewDate = new Date(date+'T00:00:00');
+        renderCalendar(); renderRsvpList(); renderDayDetail();
+        return true;
+      });
+    }, '请输入活动密码');
     return;
   }
 
+  // 新增活动：需要「活动密码」
   var dates;
   if(dateEnd && dateEnd > date){
     dates = []; var curC = date;
@@ -1106,57 +1199,155 @@ document.getElementById('submitBtn').addEventListener('click', function(){
       }
     }
   }
-  for(var ei=0; ei<newEntries.length; ei++){ newEntries[ei].id = Date.now() + Math.floor(Math.random()*100000) + ei; bookings.push(newEntries[ei]); }
-  showToast('活动已新增（共'+newEntries.length+'笔）');
-  resetForm();
-  viewDate = new Date(date+'T00:00:00');
-  renderCalendar(); renderRsvpList();
-  saveBookings();
+
+  showPasswordModal(function(password){
+    return apiAddBookings(password, newEntries).then(function(res){
+      if(res.wrongPassword) return false;
+      return apiGetData().then(function(data){
+        bookings = data.bookings || [];
+        specialDates = data.specialDates || [];
+        showToast('活动已新增（共'+newEntries.length+'笔）');
+        resetForm();
+        viewDate = new Date(date+'T00:00:00');
+        renderCalendar(); renderRsvpList();
+        return true;
+      });
+    });
+  }, '请输入活动密码');
 });
 
 document.getElementById('exportBtn').addEventListener('click', function(){
-  showPasswordModal(function(){
-    var payload = { exportedAt: new Date().toISOString(), bookings: bookings, specialDates: specialDates };
-    var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'puyuan_backup_' + todayStr() + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 下载备份。';
-    showToast('备份文件已下载');
-  }, backupPassword);
+  showPasswordModal(function(password){
+    return apiBackupExport(password).then(function(res){
+      if(res.wrongPassword) return false;
+      var payload = res.data;
+      var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'puyuan_backup_' + todayStr() + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 下载备份。';
+      showToast('备份文件已下载');
+      return true;
+    });
+  }, '请输入备份/还原密码');
 });
 
 document.getElementById('importBtn').addEventListener('click', function(){
-  showPasswordModal(function(){
-    document.getElementById('importFile').click();
-  }, backupPassword);
+  showPasswordModal(function(password){
+    return new Promise(function(resolve){
+      var fileInput = document.getElementById('importFile');
+      var handled = false;
+      fileInput.onchange = function(e){
+        if(handled) return;
+        handled = true;
+        var file = e.target.files[0];
+        if(!file){ resolve(false); return; }
+        var reader = new FileReader();
+        reader.onload = function(evt){
+          var data;
+          try{ data = JSON.parse(evt.target.result); }catch(err){ alert('文件格式错误，无法读取，请确认这是本系统下载的备份档。'); resolve(false); return; }
+          if(!data || !Array.isArray(data.bookings)){ alert('这不是有效的备份文件。'); resolve(false); return; }
+          var ok = confirm('还原备份会覆盖目前所有资料。\n目前活动：'+bookings.length+' 笔\n备份档活动：'+data.bookings.length+' 笔（备份时间：'+(data.exportedAt||'未知')+'）\n\n确定要用备份档覆盖目前的资料吗？');
+          if(!ok){ resolve(false); return; }
+          apiBackupImport(password, data.bookings || [], data.specialDates || []).then(function(res){
+            if(res.wrongPassword){ resolve(false); return; }
+            bookings = data.bookings || [];
+            specialDates = data.specialDates || [];
+            showToast('已还原备份');
+            document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 还原备份。';
+            renderAll();
+            resolve(true);
+          }).catch(function(err){
+            alert('还原失败：'+(err && err.message ? err.message : err));
+            resolve(false);
+          });
+        };
+        reader.readAsText(file);
+        fileInput.value = '';
+      };
+      fileInput.click();
+    });
+  }, '请输入备份/还原密码');
 });
 
-document.getElementById('importFile').addEventListener('change', function(e){
-  var file = e.target.files[0];
-  if(!file) return;
-  var reader = new FileReader();
-  reader.onload = function(evt){
-    var data;
-    try{ data = JSON.parse(evt.target.result); }catch(err){ alert('文件格式错误，无法读取，请确认这是本系统下载的备份档。'); return; }
-    if(!data || !Array.isArray(data.bookings)){ alert('这不是有效的备份文件。'); return; }
-    var ok = confirm('还原备份会覆盖目前所有资料。\n目前活动：'+bookings.length+' 笔\n备份档活动：'+data.bookings.length+' 笔（备份时间：'+(data.exportedAt||'未知')+'）\n\n确定要用备份档覆盖目前的资料吗？');
-    if(!ok){ return; }
-    bookings = data.bookings || [];
-    specialDates = data.specialDates || [];
-    Promise.all([saveBookings(), saveSpecialDates()]).then(function(){
-      showToast('已还原备份');
-      document.getElementById('backupStatus').textContent = '已于 ' + new Date().toLocaleString() + ' 还原备份。';
-      renderAll();
+function monthLabelStr(y,m){ return y+'年'+(m+1)+'月'; }
+
+function buildMonthPrintable(y, m){
+  var firstDay = mondayIndex(new Date(y,m,1).getDay());
+  var daysInMonth = new Date(y,m+1,0).getDate();
+  var html = '<div class="printMonth"><h2 style="font-size:16px;margin-bottom:8px;">'+monthLabelStr(y,m)+'</h2>';
+  html += '<div class="printGrid">';
+  var wd = ['一','二','三','四','五','六','日'];
+  for(var w=0; w<7; w++){ html += '<div style="text-align:center;font-size:10px;font-weight:600;">'+wd[w]+'</div>'; }
+  for(var i=0;i<firstDay;i++){ html += '<div></div>'; }
+  var monthEventsList = [];
+  for(var d=1; d<=daysInMonth; d++){
+    var ds = dateStr(y,m,d);
+    var dayEvents = bookings.filter(function(b){return b.date===ds;}).sort(function(a,b){return a.start.localeCompare(b.start);});
+    monthEventsList = monthEventsList.concat(dayEvents);
+    var special = getSpecial(ds);
+    var cellStyle = '';
+    if(special){
+      if(special.type==='bigEvent'){ cellStyle='background:#4fc3f7;'; }
+      else if(special.type==='holiday'){ cellStyle='background:#e0e0e0;'; }
+      if(special.type==='classOnPH'){ cellStyle+='border:1.5px solid #8e24aa;'; }
+    }
+    var pills = dayEvents.slice(0,2).map(function(b){return '<div class="printPill" style="'+orgStyle(b.org)+'">'+escapeHtml(b.eventName)+'</div>';}).join('');
+    if(dayEvents.length>2){ pills += '<div style="font-size:8px;">+'+(dayEvents.length-2)+'</div>'; }
+    if(special && special.type==='bigEvent'){ pills = '<div class="printPill" style="background:rgba(13,71,161,0.2);color:#0d47a1;font-weight:700;">'+escapeHtml(special.label||'全校活动')+'</div>' + pills; }
+    html += '<div class="printDayCell" style="'+cellStyle+'"><b>'+d+'</b>'+pills+'</div>';
+  }
+  html += '</div>';
+
+  var monthKey = y+'-'+pad(m+1);
+  var monthSpecials = specialDates.filter(function(s){ return s.date.slice(0,7) === monthKey; }).sort(function(a,b){return a.date.localeCompare(b.date);});
+  if(monthSpecials.length){
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">假期 / 特殊日期</div>';
+    html += '<table class="printTable"><tr><th>日期</th><th>类型</th><th>名称</th></tr>';
+    monthSpecials.forEach(function(s){
+      html += '<tr><td>'+s.date+'</td><td>'+SPECIAL_TYPE_LABEL[s.type]+'</td><td>'+escapeHtml(s.label||'')+'</td></tr>';
     });
-  };
-  reader.readAsText(file);
-  e.target.value = '';
+    html += '</table>';
+  }
+
+  if(monthEventsList.length){
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">活动详细清单</div>';
+    html += '<table class="printTable"><tr><th>日期</th><th>时间</th><th>活动名称</th><th>组织</th><th>空间</th><th>负责人</th><th>备注</th></tr>';
+    monthEventsList.sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);}).forEach(function(b){
+      html += '<tr><td>'+b.date+'</td><td>'+b.start+'-'+b.end+'</td><td>'+escapeHtml(b.eventName)+'</td><td>'+escapeHtml(orgLabel(b.org))+'</td><td>'+escapeHtml(b.space||'')+'</td><td>'+escapeHtml(b.organizerName||'')+'</td><td>'+escapeHtml(b.notes||'')+'</td></tr>';
+    });
+    html += '</table>';
+  } else {
+    html += '<div style="font-size:11px;color:#888;">本月没有活动记录。</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+document.getElementById('pdfExportBtn').addEventListener('click', function(){
+  var months = parseInt(document.getElementById('pdfRange').value, 10);
+  var today = new Date();
+  var y = today.getFullYear(), m = today.getMonth();
+  var html = '<div style="font-family:sans-serif;padding:20px;"><h1 style="font-size:20px;margin-bottom:4px;">樸園人专区 活动汇出报表</h1><div style="font-size:11px;color:#666;margin-bottom:20px;">汇出时间：'+new Date().toLocaleString()+'</div>';
+  for(var i=0;i<months;i++){
+    var mm = m+i;
+    var yy = y + Math.floor(mm/12);
+    var realM = ((mm%12)+12)%12;
+    html += buildMonthPrintable(yy, realM);
+  }
+  html += '</div>';
+  document.getElementById('printArea').innerHTML = html;
+  document.body.classList.add('printMode');
+  setTimeout(function(){ window.print(); }, 100);
+});
+window.addEventListener('afterprint', function(){
+  document.body.classList.remove('printMode');
 });
 
 loadBookings();
