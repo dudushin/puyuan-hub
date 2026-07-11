@@ -259,6 +259,11 @@ a { color: inherit; }
 </div>
 
 <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">已删除活动（30天内可复原）</div>
+  <div id="deletedList" style="font-size:12px;"></div>
+</div>
+
+<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
   <div style="font-size:14px;font-weight:500;margin-bottom:8px;">汇出月历 PDF</div>
   <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
     <select id="pdfRange" style="flex:1;min-width:120px;">
@@ -304,18 +309,29 @@ function apiAddBookings(password, entries){
     if(r.status===401) return {ok:false, wrongPassword:true};
     return r.json().then(function(j){
       if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      if(typeof j.bookingsVersion === 'number') bookingsVersion = j.bookingsVersion;
       return {ok:true, ids:j.ids};
     });
   });
 }
 function apiAdminWrite(password, key, value){
+  var baseVersion = key === 'bookings' ? bookingsVersion : specialDatesVersion;
   return fetch('/api/data', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({mode:'admin', password:password, key:key, value:value})
+    body: JSON.stringify({mode:'admin', password:password, key:key, value:value, baseVersion:baseVersion})
   }).then(function(r){
     if(r.status===401) return {ok:false, wrongPassword:true};
+    if(r.status===409){
+      return r.json().then(function(j){
+        if(key==='bookings'){ bookings = j.latest || bookings; bookingsVersion = j.currentVersion; }
+        else { specialDates = j.latest || specialDates; specialDatesVersion = j.currentVersion; }
+        return {ok:false, conflict:true};
+      });
+    }
     return r.json().then(function(j){
       if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      if(key==='bookings') bookingsVersion = j.version;
+      else specialDatesVersion = j.version;
       return {ok:true};
     });
   });
@@ -391,6 +407,8 @@ function stripSpacePrefix(sp){
 }
 
 var bookings = [];
+var bookingsVersion = 0;
+var specialDatesVersion = 0;
 var specialDates = [];
 var customDates = [];
 var viewDate = new Date();
@@ -517,7 +535,7 @@ function renderUpcomingBanner(){
   var box = document.getElementById('upcomingBanner');
   var today = todayStr();
   var in48 = addDays(today, 2);
-  var list = bookings.filter(function(b){return b.date>=today && b.date<=in48;}).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  var list = activeBookings().filter(function(b){return b.date>=today && b.date<=in48;}).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
   if(list.length===0){ box.style.display='none'; return; }
   box.style.display = 'block';
   box.innerHTML = '<b>即将到来（48小时内）：</b> ' + list.map(function(b){return escapeHtml(b.eventName)+'（'+b.date.slice(5)+' '+b.start+'）';}).join('　·　');
@@ -604,7 +622,7 @@ function renderSpaceFilterResults(){
   var prefix = isGroup ? campusPrefixFor(groupName) : null;
   var displayLabel = isGroup ? groupName : stripSpacePrefix(spaceValue);
   var today = todayStr();
-  var list = bookings.filter(function(b){
+  var list = activeBookings().filter(function(b){
     if(!b.space) return false;
     if(!(b.date>=today)) return false;
     return isGroup ? (b.space.indexOf(prefix)===0) : (b.space===spaceValue);
@@ -627,7 +645,7 @@ function renderSpaceFilterResults(){
 document.getElementById('spaceFilterSelect').addEventListener('change', renderSpaceFilterResults);
 
 function renderAll(){
-  document.getElementById('debugCount').textContent = '目前储存的活动数：'+bookings.length+'笔';
+  document.getElementById('debugCount').textContent = '目前储存的活动数：'+activeBookings().length+'笔';
   renderSpaceFilterOptions();
   renderSpaceFilterResults();
   renderSpaceCheckboxes();
@@ -636,6 +654,42 @@ function renderAll(){
   renderCalendar();
   renderRsvpList();
   renderBigEventList();
+  renderDeletedList();
+}
+
+function renderDeletedList(){
+  var box = document.getElementById('deletedList');
+  var cutoff = Date.now() - 30*24*60*60*1000;
+  var deleted = bookings.filter(function(b){ return b.deleted && (!b.deletedAt || b.deletedAt >= cutoff); })
+    .sort(function(a,b){ return (b.deletedAt||0) - (a.deletedAt||0); });
+  if(deleted.length===0){ box.innerHTML = '<div style="color:var(--text-muted);">目前没有已删除的活动。</div>'; return; }
+  box.innerHTML = deleted.map(function(b){
+    return '<div style="'+orgStyle(b.org)+'opacity:0.7;border-radius:var(--radius);padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+      +'<div><div style="font-weight:500;font-size:13px;">'+escapeHtml(b.eventName)+'</div>'
+      +'<div style="font-size:11px;">'+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</div></div>'
+      +'<button class="restoreBtn" data-id="'+b.id+'" style="flex-shrink:0;">复原</button>'
+      +'</div>';
+  }).join('');
+  var btns = box.querySelectorAll('.restoreBtn');
+  for(var i=0;i<btns.length;i++){
+    btns[i].addEventListener('click', function(){
+      var idAttr = this.getAttribute('data-id');
+      showPasswordModal(function(password){
+        var newList = bookings.map(function(b){
+          if(String(b.id)===idAttr) return Object.assign({}, b, {deleted:false, deletedAt:null});
+          return b;
+        });
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再复原一次。'); renderAll(); return true; }
+          bookings = newList;
+          showToast('活动已复原');
+          renderAll();
+          return true;
+        });
+      }, '请输入活动密码');
+    });
+  }
 }
 
 function loadBookings(){
@@ -650,6 +704,8 @@ function loadBookings(){
   apiGetData().then(function(data){
     bookings = data.bookings || [];
     specialDates = data.specialDates || [];
+    bookingsVersion = data.bookingsVersion || 0;
+    specialDatesVersion = data.specialDatesVersion || 0;
     renderAll();
   }).catch(function(err){
     document.getElementById('loadStatus').textContent = '载入资料错误：'+(err && err.message ? err.message : String(err));
@@ -657,7 +713,8 @@ function loadBookings(){
   });
 }
 
-function visibleBookings(){ if(activeTab === "总览") return bookings; return bookings.filter(function(b){return b.org===activeTab;}); }
+function activeBookings(){ return bookings.filter(function(b){ return !b.deleted; }); }
+function visibleBookings(){ var base = activeBookings(); if(activeTab === "总览") return base; return base.filter(function(b){return b.org===activeTab;}); }
 function getSpecial(ds){ for(var i=0;i<specialDates.length;i++){ if(specialDates[i].date===ds) return specialDates[i]; } return null; }
 var SPECIAL_TYPE_LABEL = {holiday:'假期', classOnPH:'公共假期上课', bigEvent:'全校大活动'};
 
@@ -826,6 +883,7 @@ function renderDayDetail(){
         var newList = specialDates.filter(function(s){return s.date!==selectedDay;});
         return apiAdminWrite(password, 'specialDates', newList).then(function(res){
           if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
           specialDates = newList;
           showToast('已删除标记');
           renderCalendar(); renderDayDetail(); renderBigEventList();
@@ -863,14 +921,18 @@ function renderDayDetail(){
         deleteWholeSeries = confirm('这是重复性活动的一部分。\n按「确定」删除整个系列（全部场次）。\n按「取消」只删除这一场。');
       }
       showPasswordModal(function(password){
-        var newList = deleteWholeSeries
-          ? bookings.filter(function(b){return b.seriesId!==target.seriesId;})
-          : bookings.filter(function(b){return String(b.id)!==idAttr;});
+        var nowTs = Date.now();
+        var newList = bookings.map(function(b){
+          var match = deleteWholeSeries ? (b.seriesId===target.seriesId) : (String(b.id)===idAttr);
+          if(match) return Object.assign({}, b, {deleted:true, deletedAt:nowTs});
+          return b;
+        });
         return apiAdminWrite(password, 'bookings', newList).then(function(res){
           if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
           bookings = newList;
-          showToast('活动已删除');
-          renderCalendar(); renderDayDetail(); renderRsvpList(); renderSpaceFilterResults();
+          showToast('活动已删除（30天内可在下方"已删除活动"复原）');
+          renderCalendar(); renderDayDetail(); renderRsvpList(); renderSpaceFilterResults(); renderDeletedList();
           return true;
         });
       }, '请输入活动密码');
@@ -1001,6 +1063,7 @@ function bindEventCardHandlers(container){
         });
         return apiAdminWrite(password, 'bookings', newList).then(function(res){
           if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
           bookings = newList;
           showToast('已从活动更新移除');
           renderRsvpList();
@@ -1015,7 +1078,7 @@ function renderRsvpList(){
   var container = document.getElementById('rsvpList');
   var pastContainer = document.getElementById('pastList');
   try{
-    var visible = bookings.filter(function(b){ return b.showInUpdates !== false; });
+    var visible = activeBookings().filter(function(b){ return b.showInUpdates !== false; });
     if(!visible || visible.length===0){
       container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">目前没有设定要显示的活动。</div>';
       pastContainer.innerHTML = '';
@@ -1078,6 +1141,7 @@ document.getElementById('addSpecialDate').addEventListener('click', function(){
     for(var j=0;j<dates.length;j++){ newList.push({date:dates[j], type:type, label:label}); }
     return apiAdminWrite(password, 'specialDates', newList).then(function(res){
       if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
       specialDates = newList;
       showToast('已标记 '+dates.length+' 天');
       renderCalendar(); renderBigEventList();
@@ -1113,7 +1177,7 @@ function renderSearch(){
   var box = document.getElementById('searchResults');
   var term = searchTerm.trim().toLowerCase();
   if(!term){ box.style.display='none'; return; }
-  var allResults = bookings.filter(function(b){
+  var allResults = activeBookings().filter(function(b){
     return (b.eventName && b.eventName.toLowerCase().indexOf(term)!==-1)
       || (b.notes && b.notes.toLowerCase().indexOf(term)!==-1)
       || (b.space && (b.space.toLowerCase().indexOf(term)!==-1 || stripSpacePrefix(b.space).toLowerCase().indexOf(term)!==-1))
@@ -1204,6 +1268,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
         });
         return apiAdminWrite(password, 'bookings', newList).then(function(res){
           if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
           bookings = newList;
           showToast('已更新整个系列');
           resetForm();
@@ -1230,6 +1295,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
       var newList = bookings.map(function(bk){ return bk.id===editIdCapture ? candidate : bk; });
       return apiAdminWrite(password, 'bookings', newList).then(function(res){
         if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
         bookings = newList;
         showToast('活动已更新');
         resetForm();
@@ -1279,6 +1345,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
   showPasswordModal(function(password){
     return apiAddBookings(password, newEntries).then(function(res){
       if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
       var ids = res.ids || [];
       var withIds = newEntries.map(function(e, i){
         var copy = Object.assign({}, e);
@@ -1295,6 +1362,8 @@ document.getElementById('submitBtn').addEventListener('click', function(){
       apiGetData().then(function(data){
         bookings = data.bookings || [];
         specialDates = data.specialDates || [];
+        bookingsVersion = data.bookingsVersion || 0;
+        specialDatesVersion = data.specialDatesVersion || 0;
         renderCalendar(); renderRsvpList(); renderSpaceFilterResults();
       }).catch(function(){});
       return true;
@@ -1306,6 +1375,7 @@ document.getElementById('exportBtn').addEventListener('click', function(){
   showPasswordModal(function(password){
     return apiBackupExport(password).then(function(res){
       if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
       var payload = res.data;
       var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
       var url = URL.createObjectURL(blob);
