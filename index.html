@@ -91,7 +91,7 @@ a { color: inherit; }
 <div id="pwModal" class="pwOverlay" style="display:none;">
   <div class="pwBox">
     <div id="pwModalTitle" style="font-weight:500;margin-bottom:10px;">请输入管理密码</div>
-    <input type="password" id="pwInput" placeholder="密码" style="width:100%;margin-bottom:8px;">
+    <input type="password" id="pwInput" placeholder="密码" autocomplete="off" style="width:100%;margin-bottom:8px;">
     <div id="pwError" style="color:var(--text-danger);font-size:12px;margin-bottom:8px;display:none;">密码错误，请重试。</div>
     <div style="display:flex;gap:8px;">
       <button id="pwConfirm" style="flex:1;">确认</button>
@@ -461,7 +461,13 @@ document.getElementById('pwCancel').addEventListener('click', function(){
   pendingAction = null;
 });
 document.getElementById('pwInput').addEventListener('keydown', function(e){
-  if(e.key === 'Enter'){ e.preventDefault(); runPendingAction(); }
+  if(e.key === 'Enter' || e.keyCode === 13){ e.preventDefault(); e.stopPropagation(); runPendingAction(); }
+});
+document.getElementById('pwModal').addEventListener('keydown', function(e){
+  if((e.key === 'Enter' || e.keyCode === 13) && document.getElementById('pwModal').style.display !== 'none'){
+    e.preventDefault();
+    runPendingAction();
+  }
 });
 
 function copyText(text){
@@ -1203,15 +1209,25 @@ document.getElementById('submitBtn').addEventListener('click', function(){
   showPasswordModal(function(password){
     return apiAddBookings(password, newEntries).then(function(res){
       if(res.wrongPassword) return false;
-      return apiGetData().then(function(data){
+      var ids = res.ids || [];
+      var withIds = newEntries.map(function(e, i){
+        var copy = Object.assign({}, e);
+        copy.id = ids[i] || (Date.now() + i);
+        if(!copy.attendees) copy.attendees = [];
+        return copy;
+      });
+      bookings = bookings.concat(withIds);
+      showToast('活动已新增（共'+newEntries.length+'笔）');
+      resetForm();
+      viewDate = new Date(date+'T00:00:00');
+      renderCalendar(); renderRsvpList();
+      // 背景重新同步一次，确保跟服务器完全一致（失败也不影响刚才已经显示的画面）
+      apiGetData().then(function(data){
         bookings = data.bookings || [];
         specialDates = data.specialDates || [];
-        showToast('活动已新增（共'+newEntries.length+'笔）');
-        resetForm();
-        viewDate = new Date(date+'T00:00:00');
         renderCalendar(); renderRsvpList();
-        return true;
-      });
+      }).catch(function(){});
+      return true;
     });
   }, '请输入活动密码');
 });
