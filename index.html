@@ -566,6 +566,14 @@ function renderSpaceCheckboxes(){
   box.innerHTML = html;
 }
 
+function campusPrefixFor(groupName){
+  if(groupName==='校舍1') return '校舍1-';
+  if(groupName==='校舍2') return '校舍2-';
+  if(groupName==='校舍3') return '校舍3-';
+  if(groupName==='其他') return '其他-';
+  return null;
+}
+
 function renderSpaceFilterOptions(){
   var sel = document.getElementById('spaceFilterSelect');
   var currentVal = sel.value;
@@ -574,6 +582,7 @@ function renderSpaceFilterOptions(){
   for(var g=0; g<groups.length; g++){
     var groupName = groups[g];
     html += '<optgroup label="'+groupName+'">';
+    html += '<option value="group:'+groupName+'">— 整个'+groupName+'（全部空间）—</option>';
     var spaces = SPACE_GROUPS[groupName];
     for(var s=0; s<spaces.length; s++){
       var sp = spaces[s];
@@ -590,19 +599,27 @@ function renderSpaceFilterResults(){
   var box = document.getElementById('spaceFilterResults');
   var spaceValue = sel.value;
   if(!spaceValue){ box.innerHTML = ''; return; }
+  var isGroup = spaceValue.indexOf('group:')===0;
+  var groupName = isGroup ? spaceValue.slice(6) : null;
+  var prefix = isGroup ? campusPrefixFor(groupName) : null;
+  var displayLabel = isGroup ? groupName : stripSpacePrefix(spaceValue);
   var today = todayStr();
-  var list = bookings.filter(function(b){ return b.space===spaceValue && b.date>=today; }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  var list = bookings.filter(function(b){
+    if(!b.space) return false;
+    if(!(b.date>=today)) return false;
+    return isGroup ? (b.space.indexOf(prefix)===0) : (b.space===spaceValue);
+  }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
   var groups = groupForList(list);
   if(groups.length===0){
-    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">「'+escapeHtml(stripSpacePrefix(spaceValue))+'」目前没有即将到来的活动。</div>';
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">「'+escapeHtml(displayLabel)+'」目前没有即将到来的活动。</div>';
     return;
   }
-  box.innerHTML = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">「'+escapeHtml(stripSpacePrefix(spaceValue))+'」即将到来的活动（'+groups.length+'笔）</div>' +
+  box.innerHTML = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">「'+escapeHtml(displayLabel)+'」即将到来的活动（'+groups.length+'笔）</div>' +
     groups.map(function(g){
       var b = g.rep;
       return '<div style="'+orgStyle(b.org)+'border-radius:var(--radius);padding:8px 10px;margin-bottom:6px;">'
         +'<div style="font-weight:500;font-size:13px;">'+escapeHtml(b.eventName)+(g.count>1?(' <span style="font-size:10px;font-weight:400;">（重复，共'+g.count+'场）</span>'):'')+'</div>'
-        +'<div style="font-size:11px;margin-top:2px;">'+b.date+' '+b.start+'-'+b.end+' · '+escapeHtml(orgLabel(b.org))+(b.organizerName?(' · 负责人：'+escapeHtml(b.organizerName)):'')+'</div>'
+        +'<div style="font-size:11px;margin-top:2px;">'+b.date+' '+b.start+'-'+b.end+(isGroup && b.space?(' · '+escapeHtml(stripSpacePrefix(b.space))):'')+' · '+escapeHtml(orgLabel(b.org))+(b.organizerName?(' · 负责人：'+escapeHtml(b.organizerName)):'')+'</div>'
         +(b.notes?('<div style="font-size:11px;margin-top:2px;">备注：'+escapeHtml(b.notes)+'</div>'):'')
         +'</div>';
     }).join('');
