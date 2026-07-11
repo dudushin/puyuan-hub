@@ -1,16 +1,15 @@
 // api/data.js
 // Vercel Serverless Function.
 //
-// GET  -> public, returns { bookings: [...], specialDates: [...] } so anyone can view the calendar.
+// GET  -> public, returns { bookings, specialDates, bookingsVersion, specialDatesVersion }.
 //
-// POST with { mode: 'addBookings', password, entries: [...] } -> requires BOOKING_PASSWORD.
-//   This is how "新增活动" works. It can only ADD new booking entries (never modify/delete
-//   existing ones). The server assigns each entry its own id (client-supplied ids are ignored).
+// POST { mode:'addBookings', password, entries } -> requires BOOKING_PASSWORD. Appends new bookings
+//   (soft-delete aware: never touches deleted flags). Bumps bookingsVersion.
 //
-// POST with { mode: 'admin', password, key, value } -> requires BOOKING_PASSWORD when
-//   key === 'bookings' (editing/deleting activities), or HOLIDAY_PASSWORD when
-//   key === 'specialDates' (marking/editing/deleting holidays, public-holiday-with-class,
-//   and school-wide events). The client sends the full replacement array for that key.
+// POST { mode:'admin', password, key, value, baseVersion } -> requires BOOKING_PASSWORD (key=bookings)
+//   or HOLIDAY_PASSWORD (key=specialDates). baseVersion must match the current stored version or the
+//   write is rejected with 409 (someone else saved in between) so nobody silently overwrites another
+//   admin's concurrent edit.
 
 module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -29,7 +28,7 @@ module.exports = async function handler(req, res) {
     });
     if (!r.ok) throw new Error('Supabase HTTP ' + r.status);
     const rows = await r.json();
-    return (rows && rows[0] && rows[0].value) ? rows[0].value : [];
+    return (rows && rows[0] && rows[0].value) ? rows[0].value : null;
   }
 
   async function writeKey(key, value) {
@@ -49,10 +48,26 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  async function getVersion(key) {
+    const v = await fetchKey(key + '_v');
+    return (typeof v === 'number') ? v : 0;
+  }
+  async function bumpVersion(key) {
+    const cur = await getVersion(key);
+    const next = cur + 1;
+    await writeKey(key + '_v', next);
+    return next;
+  }
+
   if (req.method === 'GET') {
     try {
-      const [bookings, specialDates] = await Promise.all([fetchKey('bookings'), fetchKey('specialDates')]);
-      res.status(200).json({ bookings: bookings, specialDates: specialDates });
+      const [bookings, specialDates, bookingsVersion, specialDatesVersion] = await Promise.all([
+        fetchKey('bookings'), fetchKey('specialDates'), getVersion('bookings'), getVersion('specialDates')
+      ]);
+      res.status(200).json({
+        bookings: bookings || [], specialDates: specialDates || [],
+        bookingsVersion: bookingsVersion, specialDatesVersion: specialDatesVersion
+      });
     } catch (err) {
       res.status(500).json({ error: String(err && err.message ? err.message : err) });
     }
@@ -69,17 +84,19 @@ module.exports = async function handler(req, res) {
       const entries = Array.isArray(body.entries) ? body.entries : [];
       if (entries.length === 0) { res.status(400).json({ error: 'no_entries' }); return; }
       try {
-        const current = await fetchKey('bookings');
+        const current = (await fetchKey('bookings')) || [];
         const withIds = entries.map(function (e, i) {
           const clean = Object.assign({}, e);
           delete clean.id;
           clean.id = Date.now() + Math.floor(Math.random() * 1000000) + i;
           if (!Array.isArray(clean.attendees)) clean.attendees = [];
+          clean.deleted = false;
           return clean;
         });
         const updated = current.concat(withIds);
         await writeKey('bookings', updated);
-        res.status(200).json({ ok: true, ids: withIds.map(function (e) { return e.id; }) });
+        const newVersion = await bumpVersion('bookings');
+        res.status(200).json({ ok: true, ids: withIds.map(function (e) { return e.id; }), bookingsVersion: newVersion });
       } catch (err) {
         res.status(500).json({ error: String(err && err.message ? err.message : err) });
       }
@@ -87,14 +104,21 @@ module.exports = async function handler(req, res) {
     }
 
     if (body.mode === 'admin') {
-      const { password, key, value } = body;
+      const { password, key, value, baseVersion } = body;
       if (key !== 'bookings' && key !== 'specialDates') { res.status(400).json({ error: 'invalid_key' }); return; }
       const requiredPassword = key === 'bookings' ? BOOKING_PASSWORD : HOLIDAY_PASSWORD;
       if (password !== requiredPassword) { res.status(401).json({ error: 'wrong_password' }); return; }
       if (value === undefined) { res.status(400).json({ error: 'missing_value' }); return; }
       try {
+        const currentVersion = await getVersion(key);
+        if (typeof baseVersion === 'number' && baseVersion !== currentVersion) {
+          const latest = await fetchKey(key);
+          res.status(409).json({ error: 'conflict', currentVersion: currentVersion, latest: latest });
+          return;
+        }
         await writeKey(key, value);
-        res.status(200).json({ ok: true });
+        const newVersion = await bumpVersion(key);
+        res.status(200).json({ ok: true, version: newVersion });
       } catch (err) {
         res.status(500).json({ error: String(err && err.message ? err.message : err) });
       }
@@ -107,5 +131,6 @@ module.exports = async function handler(req, res) {
 
   res.status(405).json({ error: 'method_not_allowed' });
 };
+
 
 
