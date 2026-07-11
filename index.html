@@ -131,6 +131,14 @@ a { color: inherit; }
 
 <div id="dayDetail" style="display:none;background:var(--surface-1);border-radius:var(--radius);padding:12px;margin-bottom:1.5rem;font-size:13px;"></div>
 
+<div style="margin-bottom:1.5rem;">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">依空间查看即将到来的活动</div>
+  <select id="spaceFilterSelect" style="width:100%;margin-bottom:10px;">
+    <option value="">选择空间…</option>
+  </select>
+  <div id="spaceFilterResults"></div>
+</div>
+
 <div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
   <div id="formTitle" style="font-size:16px;font-weight:500;margin-bottom:12px;">新增活动 / 预订</div>
   <div class="puyuanFormGrid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
@@ -558,8 +566,53 @@ function renderSpaceCheckboxes(){
   box.innerHTML = html;
 }
 
+function renderSpaceFilterOptions(){
+  var sel = document.getElementById('spaceFilterSelect');
+  var currentVal = sel.value;
+  var html = '<option value="">选择空间…</option>';
+  var groups = Object.keys(SPACE_GROUPS);
+  for(var g=0; g<groups.length; g++){
+    var groupName = groups[g];
+    html += '<optgroup label="'+groupName+'">';
+    var spaces = SPACE_GROUPS[groupName];
+    for(var s=0; s<spaces.length; s++){
+      var sp = spaces[s];
+      html += '<option value="'+sp+'">'+stripSpacePrefix(sp)+'</option>';
+    }
+    html += '</optgroup>';
+  }
+  sel.innerHTML = html;
+  sel.value = currentVal;
+}
+
+function renderSpaceFilterResults(){
+  var sel = document.getElementById('spaceFilterSelect');
+  var box = document.getElementById('spaceFilterResults');
+  var spaceValue = sel.value;
+  if(!spaceValue){ box.innerHTML = ''; return; }
+  var today = todayStr();
+  var list = bookings.filter(function(b){ return b.space===spaceValue && b.date>=today; }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  var groups = groupForList(list);
+  if(groups.length===0){
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">「'+escapeHtml(stripSpacePrefix(spaceValue))+'」目前没有即将到来的活动。</div>';
+    return;
+  }
+  box.innerHTML = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">「'+escapeHtml(stripSpacePrefix(spaceValue))+'」即将到来的活动（'+groups.length+'笔）</div>' +
+    groups.map(function(g){
+      var b = g.rep;
+      return '<div style="'+orgStyle(b.org)+'border-radius:var(--radius);padding:8px 10px;margin-bottom:6px;">'
+        +'<div style="font-weight:500;font-size:13px;">'+escapeHtml(b.eventName)+(g.count>1?(' <span style="font-size:10px;font-weight:400;">（重复，共'+g.count+'场）</span>'):'')+'</div>'
+        +'<div style="font-size:11px;margin-top:2px;">'+b.date+' '+b.start+'-'+b.end+' · '+escapeHtml(orgLabel(b.org))+(b.organizerName?(' · 负责人：'+escapeHtml(b.organizerName)):'')+'</div>'
+        +(b.notes?('<div style="font-size:11px;margin-top:2px;">备注：'+escapeHtml(b.notes)+'</div>'):'')
+        +'</div>';
+    }).join('');
+}
+document.getElementById('spaceFilterSelect').addEventListener('change', renderSpaceFilterResults);
+
 function renderAll(){
   document.getElementById('debugCount').textContent = '目前储存的活动数：'+bookings.length+'笔';
+  renderSpaceFilterOptions();
+  renderSpaceFilterResults();
   renderSpaceCheckboxes();
   renderUpcomingBanner();
   renderTabs();
@@ -800,7 +853,7 @@ function renderDayDetail(){
           if(res.wrongPassword) return false;
           bookings = newList;
           showToast('活动已删除');
-          renderCalendar(); renderDayDetail(); renderRsvpList();
+          renderCalendar(); renderDayDetail(); renderRsvpList(); renderSpaceFilterResults();
           return true;
         });
       }, '请输入活动密码');
@@ -1137,7 +1190,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
           bookings = newList;
           showToast('已更新整个系列');
           resetForm();
-          renderCalendar(); renderRsvpList(); renderDayDetail();
+          renderCalendar(); renderRsvpList(); renderDayDetail(); renderSpaceFilterResults();
           return true;
         });
       }, '请输入活动密码（修改整个系列）');
@@ -1164,7 +1217,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
         showToast('活动已更新');
         resetForm();
         viewDate = new Date(date+'T00:00:00');
-        renderCalendar(); renderRsvpList(); renderDayDetail();
+        renderCalendar(); renderRsvpList(); renderDayDetail(); renderSpaceFilterResults();
         return true;
       });
     }, '请输入活动密码');
@@ -1220,12 +1273,12 @@ document.getElementById('submitBtn').addEventListener('click', function(){
       showToast('活动已新增（共'+newEntries.length+'笔）');
       resetForm();
       viewDate = new Date(date+'T00:00:00');
-      renderCalendar(); renderRsvpList();
+      renderCalendar(); renderRsvpList(); renderSpaceFilterResults();
       // 背景重新同步一次，确保跟服务器完全一致（失败也不影响刚才已经显示的画面）
       apiGetData().then(function(data){
         bookings = data.bookings || [];
         specialDates = data.specialDates || [];
-        renderCalendar(); renderRsvpList();
+        renderCalendar(); renderRsvpList(); renderSpaceFilterResults();
       }).catch(function(){});
       return true;
     });
