@@ -68,7 +68,6 @@ a { color: inherit; }
 .spaceCheckGrid { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; }
 .dateChip { display:inline-flex; align-items:center; gap:4px; background:var(--surface-1); border-radius:14px; padding:3px 8px; font-size:11px; margin:2px; }
 .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2e7d32; color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; z-index:2000; box-shadow:0 4px 16px rgba(0,0,0,0.25); }
-#printArea { display:none; }
 .printMonth { page-break-after: always; }
 .printGrid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:14px; }
 .printDayCell { border:0.5px solid #ccc; min-height:56px; padding:2px 3px; font-size:9px; }
@@ -76,11 +75,6 @@ a { color: inherit; }
 .printTable { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:20px; }
 .printTable th, .printTable td { border:0.5px solid #ccc; padding:5px 6px; text-align:left; vertical-align:top; }
 .printTable th { background:#f0f0f0; }
-@media print {
-  body.printMode > *:not(#printArea) { display:none !important; }
-  #printArea { display:block !important; }
-  .printMonth:last-child { page-break-after: auto; }
-}
 </style>
 </head>
 <body>
@@ -288,8 +282,6 @@ a { color: inherit; }
 </div>
 
 </div>
-
-<div id="printArea"></div>
 
 <script>
 try {
@@ -1490,23 +1482,45 @@ document.getElementById('pdfExportBtn').addEventListener('click', function(){
   var months = parseInt(document.getElementById('pdfRange').value, 10);
   var today = new Date();
   var y = today.getFullYear(), m = today.getMonth();
-  var html = '<div style="font-family:sans-serif;padding:20px;"><h1 style="font-size:20px;margin-bottom:4px;">樸園人专区 活动汇出报表</h1><div style="font-size:11px;color:#666;margin-bottom:20px;">汇出时间：'+new Date().toLocaleString()+'</div>';
+  var bodyHtml = '<div style="font-family:sans-serif;padding:20px;color:#1a1a1a;"><h1 style="font-size:20px;margin-bottom:4px;">樸園人专区 活动汇出报表</h1><div style="font-size:11px;color:#666;margin-bottom:20px;">汇出时间：'+new Date().toLocaleString()+'</div>';
   for(var i=0;i<months;i++){
     var mm = m+i;
     var yy = y + Math.floor(mm/12);
     var realM = ((mm%12)+12)%12;
-    html += buildMonthPrintable(yy, realM);
+    bodyHtml += buildMonthPrintable(yy, realM);
   }
-  html += '</div>';
-  document.getElementById('printArea').innerHTML = html;
-  document.body.classList.add('printMode');
-  setTimeout(function(){ window.print(); }, 100);
-});
-window.addEventListener('afterprint', function(){
-  document.body.classList.remove('printMode');
-});
+  bodyHtml += '</div>';
 
-loadBookings();
+  var printWin = window.open('', '_blank');
+  if(!printWin){
+    alert('浏览器阻挡了新分页，请允许此网站的弹出视窗后再试一次。');
+    return;
+  }
+  var doc = printWin.document;
+  doc.open();
+  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>樸園活动汇出报表</title><style>'
+    + 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;margin:0;color:#1a1a1a;}'
+    + '.printMonth{page-break-after:always;}'
+    + '.printMonth:last-child{page-break-after:auto;}'
+    + '.printGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:14px;}'
+    + '.printDayCell{border:0.5px solid #ccc;min-height:56px;padding:2px 3px;font-size:9px;}'
+    + '.printPill{font-size:8px;border-radius:2px;padding:1px 2px;margin-top:1px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}'
+    + '.printTable{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:20px;}'
+    + '.printTable th,.printTable td{border:0.5px solid #ccc;padding:5px 6px;text-align:left;vertical-align:top;}'
+    + '.printTable th{background:#f0f0f0;}'
+    + '</style></head><body>' + bodyHtml + '</body></html>');
+  doc.close();
+
+  function triggerPrint(){
+    try{ printWin.focus(); printWin.print(); }catch(e){}
+  }
+  if(printWin.document.readyState === 'complete'){
+    setTimeout(triggerPrint, 200);
+  } else {
+    printWin.onload = function(){ setTimeout(triggerPrint, 200); };
+    setTimeout(triggerPrint, 600);
+  }
+});loadBookings();
 
 } catch(topErr){
   document.getElementById('loadStatus').textContent = '系统初始化错误：'+(topErr && topErr.message ? topErr.message : String(topErr));
