@@ -54,7 +54,18 @@ a { color: inherit; }
   .puyuanGrid { grid-template-columns: 1fr !important; }
   .puyuanFormGrid2 { grid-template-columns: 1fr !important; }
   .puyuanFormGrid3 { grid-template-columns: 1fr !important; }
+  .blk-calendar, .blk-spacefilter, .blk-bigevent, .blk-reglist, .blk-form { grid-column: 1 !important; }
+  .blk-calendar { order: 1 !important; }
+  .blk-spacefilter { order: 2 !important; }
+  .blk-bigevent { order: 3 !important; }
+  .blk-reglist { order: 4 !important; }
+  .blk-form { order: 5 !important; }
 }
+.blk-calendar { grid-column: 1; order: 1; min-width: 0; }
+.blk-spacefilter { grid-column: 1; order: 2; min-width: 0; }
+.blk-form { grid-column: 1; order: 3; min-width: 0; }
+.blk-bigevent { grid-column: 2; order: 1; min-width: 0; }
+.blk-reglist { grid-column: 2; order: 2; min-width: 0; }
 .dayCell { position:relative; height:60px; overflow:hidden; text-align:left; border:0.5px solid var(--border); border-radius:6px; padding:3px; display:flex; flex-direction:column; transition: transform 0.15s ease; cursor:pointer; background:#fff; }
 .dayCell:hover { transform: scale(1.25); z-index: 50; box-shadow: 0 6px 20px rgba(0,0,0,0.18); overflow:visible; }
 .dayCellInner { overflow:hidden; max-height:48px; }
@@ -101,6 +112,7 @@ a { color: inherit; }
 <div style="display:flex;gap:8px;margin-bottom:16px;">
   <button id="viewCalendarBtn" style="flex:1;font-weight:600;">📅 月历总览</button>
   <button id="viewRegisterBtn" style="flex:1;">📋 公开报名活动</button>
+  <button id="viewAdminBtn" style="flex:1;">⚙️ 管理</button>
 </div>
 
 <div id="calendarView">
@@ -112,7 +124,7 @@ a { color: inherit; }
 
 <div id="mainContent" class="puyuanGrid" style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;">
 
-<div style="min-width:0;">
+<div class="blk-calendar">
 
 <div id="orgTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;min-height:32px;"></div>
 
@@ -132,7 +144,9 @@ a { color: inherit; }
 
 <div id="dayDetail" style="display:none;background:var(--surface-1);border-radius:var(--radius);padding:12px;margin-bottom:1.5rem;font-size:13px;"></div>
 
-<div style="margin-bottom:1.5rem;">
+</div>
+
+<div class="blk-spacefilter">
   <div style="font-size:14px;font-weight:500;margin-bottom:8px;">依空间查看即将到来的活动</div>
   <select id="spaceFilterSelect" style="width:100%;margin-bottom:10px;">
     <option value="">选择空间…</option>
@@ -140,7 +154,23 @@ a { color: inherit; }
   <div id="spaceFilterResults"></div>
 </div>
 
-<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+<div class="blk-bigevent">
+  <div style="font-size:15px;font-weight:500;margin-bottom:8px;">全校大活动</div>
+  <div id="bigEventList" style="margin-bottom:20px;"></div>
+</div>
+
+<div class="blk-reglist">
+  <div style="font-size:16px;font-weight:500;margin-bottom:8px;">开放报名活动</div>
+  <div id="debugCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
+  <div id="rsvpList"></div>
+  <div id="pastSection" style="margin-top:20px;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text-muted);">过去的报名活动</div>
+    <div id="pastList"></div>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">「复制活动连结」分享去WhatsApp，别人点了会直接跳到这个活动。已报名但还没付款的人，可以点自己名字旁边的「标记已付款」自助更新。以上标示"需要密码"的操作都需要活动密码。</div>
+</div>
+
+<div class="blk-form" style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem;">
   <div id="formTitle" style="font-size:16px;font-weight:500;margin-bottom:12px;">新增活动 / 预订</div>
   <div class="puyuanFormGrid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
     <div>
@@ -212,7 +242,7 @@ a { color: inherit; }
   </div>
   <div style="margin-bottom:12px;padding:10px 12px;background:var(--surface-1);border-radius:var(--radius);">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;margin-bottom:6px;">
-      <input type="checkbox" id="showInUpdates" checked style="width:auto;">显示在活动更新栏（右侧列表）
+      <input type="checkbox" id="showInUpdates" checked style="width:auto;">显示在开放报名活动栏
     </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;">
       <input type="checkbox" id="needRsvp" style="width:auto;">开放大家登记出席
@@ -235,38 +265,6 @@ a { color: inherit; }
   </div>
 </div>
 
-<div style="margin-bottom:1rem;">
-  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">标记假期 / 全校活动日（需要密码）</div>
-  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">已标记的纪录不会列在这里，请到上方月历点选当天日期查看、编辑或删除。</div>
-  <div class="puyuanFormGrid3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
-    <select id="specialType">
-      <option value="holiday">假期（可连续多天）</option>
-      <option value="classOnPH">公共假期但上课（单日）</option>
-      <option value="bigEvent">全校大活动（单日）</option>
-    </select>
-    <input type="date" id="specialDateStart">
-    <input type="date" id="specialDateEnd" placeholder="结束日期（假期专用）">
-  </div>
-  <input type="text" id="specialLabel" placeholder="名称（选填，如：农历新年 / 运动会）" style="width:100%;margin-bottom:8px;">
-  <button id="addSpecialDate" style="width:100%;">标记 / 更新</button>
-</div>
-
-</div>
-
-<div style="min-width:0;">
-  <div style="font-size:15px;font-weight:500;margin-bottom:8px;">全校大活动</div>
-  <div id="bigEventList" style="margin-bottom:20px;"></div>
-
-  <div style="font-size:16px;font-weight:500;margin-bottom:8px;">开放报名活动</div>
-  <div id="debugCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
-  <div id="rsvpList"></div>
-  <div id="pastSection" style="margin-top:20px;">
-    <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text-muted);">过去的报名活动</div>
-    <div id="pastList"></div>
-  </div>
-  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">「复制活动连结」分享去WhatsApp，别人点了会直接跳到这个活动。已报名但还没付款的人，可以点自己名字旁边的「标记已付款」自助更新。「从活动更新移除」只是不再显示于此列表，不会删除月历纪录。以上标示"需要密码"的操作都需要活动密码。</div>
-</div>
-
 </div>
 
 </div>
@@ -277,35 +275,54 @@ a { color: inherit; }
   <div id="registrationGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;"></div>
 </div>
 
-<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
-  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">已删除活动（30天内可复原）</div>
-  <div id="deletedList" style="font-size:12px;"></div>
-</div>
+<div id="adminView" style="display:none;">
+  <div style="font-size:16px;font-weight:600;margin-bottom:16px;">管理</div>
 
-<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
-  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">汇出月历 PDF</div>
-  <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-    <select id="pdfRange" style="flex:1;min-width:120px;">
-      <option value="1">本月</option>
-      <option value="3">未来3个月</option>
-      <option value="6">未来半年</option>
-      <option value="12">未来一年</option>
-    </select>
-    <button id="pdfExportBtn" style="flex:1;min-width:140px;">开始汇出</button>
+  <div style="margin-bottom:2rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;">标记假期 / 全校活动日（需要密码）</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">已标记的纪录不会列在这里，请到月历点选当天日期查看、编辑或删除。</div>
+    <div class="puyuanFormGrid3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+      <select id="specialType">
+        <option value="holiday">假期（可连续多天）</option>
+        <option value="classOnPH">公共假期但上课（单日）</option>
+        <option value="bigEvent">全校大活动（单日）</option>
+      </select>
+      <input type="date" id="specialDateStart">
+      <input type="date" id="specialDateEnd" placeholder="结束日期（假期专用）">
+    </div>
+    <input type="text" id="specialLabel" placeholder="名称（选填，如：农历新年 / 运动会）" style="width:100%;margin-bottom:8px;">
+    <button id="addSpecialDate" style="width:100%;">标记 / 更新</button>
   </div>
-  <div style="font-size:11px;color:var(--text-muted);">会打开列印视窗，选「另存为PDF」即可存成PDF文件，内含月历图与活动详细清单。</div>
-</div>
 
-<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
-  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
-  <div style="display:flex;gap:8px;margin-bottom:8px;">
-    <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
-    <button id="importBtn" type="button" style="flex:1;">还原备份</button>
-    <input type="file" id="importFile" accept="application/json" style="display:none;">
+  <div style="margin-bottom:2rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;">已删除活动（30天内可复原）</div>
+    <div id="deletedList" style="font-size:12px;"></div>
+    <div id="deletedPagination" style="display:flex;gap:8px;justify-content:center;margin-top:10px;"></div>
   </div>
-  <div id="backupStatus" style="font-size:11px;color:var(--text-muted);">建议定期下载备份，存在自己的电脑或云端硬盘里。</div>
-</div>
 
+  <div style="margin-bottom:2rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;">汇出月历 PDF</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+      <select id="pdfRange" style="flex:1;min-width:120px;">
+        <option value="1">本月</option>
+        <option value="3">未来3个月</option>
+        <option value="6">未来半年</option>
+        <option value="12">未来一年</option>
+      </select>
+      <button id="pdfExportBtn" style="flex:1;min-width:140px;">开始汇出</button>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);">会打开列印视窗，选「另存为PDF」即可存成PDF文件，内含月历图与活动详细清单。</div>
+  </div>
+
+  <div style="margin-bottom:1rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;">备份与还原（需要密码）</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button id="exportBtn" style="flex:1;">下载备份（JSON）</button>
+      <button id="importBtn" type="button" style="flex:1;">还原备份</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none;">
+    </div>
+    <div id="backupStatus" style="font-size:11px;color:var(--text-muted);">建议定期下载备份，存在自己的电脑或云端硬盘里。</div>
+  </div>
 </div>
 
 <script>
@@ -363,6 +380,12 @@ function apiRsvp(bookingId, name, phone, remark, response, paid){
       return j;
     });
   });
+}
+function apiVerifyPassword(password, kind){
+  return fetch('/api/verify-password', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({password:password, kind:kind})
+  }).then(function(r){ return r.ok; }).catch(function(){ return false; });
 }
 function apiBackupExport(password){
   return fetch('/api/backup', {
@@ -427,6 +450,7 @@ var bookings = [];
 var bookingsVersion = 0;
 var currentView = 'calendar';
 var galleryExpandedId = null;
+var deletedPage = 0;
 var specialDatesVersion = 0;
 var specialDates = [];
 var customDates = [];
@@ -733,6 +757,9 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
 
     card += '<button class="'+prefix+'CopyBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制文字摘要'+(copyFeedbackId===(prefix+b.id)?'（已复制）':'')+'</button>';
     card += '<button class="'+prefix+'CopyLinkBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+prefix+b.id)?'（已复制）':'')+'</button>';
+    if(attendees.length>0){
+      card += '<button class="'+prefix+'CopyListBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制报名名单（含付款状态，需要密码）</button>';
+    }
 
     if(showRemoveBtn){
       card += '<button class="'+prefix+'RemoveBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">从活动更新移除（需要密码）</button>';
@@ -843,6 +870,30 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
       });
     });
   }
+  var copyListBtns = box.querySelectorAll('.'+prefix+'CopyListBtn');
+  for(var cli=0; cli<copyListBtns.length; cli++){
+    copyListBtns[cli].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      showPasswordModal(function(password){
+        return apiVerifyPassword(password, 'booking').then(function(ok){
+          if(!ok) return false;
+          var booking = null;
+          for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+          if(!booking){ return true; }
+          var atts = booking.attendees || [];
+          var lines = ['姓名\\t手机号码\\t参加/不参加\\t付款状态\\t备注'];
+          atts.forEach(function(a){
+            var paidCol = booking.collectPayment ? (a.paid==='是'?'已付款':'未付款') : '';
+            lines.push([a.name, a.phone||'', a.response, paidCol, a.remark||''].join('\\t'));
+          });
+          copyText(lines.join('\\n')).then(function(){
+            showToast('报名名单已复制（可直接贴到Excel）');
+          });
+          return true;
+        });
+      }, '请输入活动密码');
+    });
+  }
   var removeBtns = box.querySelectorAll('.'+prefix+'RemoveBtn');
   for(var rb=0; rb<removeBtns.length; rb++){
     removeBtns[rb].addEventListener('click', function(){
@@ -902,17 +953,32 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
 
 function renderDeletedList(){
   var box = document.getElementById('deletedList');
+  var pagBox = document.getElementById('deletedPagination');
+  var PAGE_SIZE = 10;
   var cutoff = Date.now() - 30*24*60*60*1000;
   var deleted = bookings.filter(function(b){ return b.deleted && (!b.deletedAt || b.deletedAt >= cutoff); })
     .sort(function(a,b){ return (b.deletedAt||0) - (a.deletedAt||0); });
-  if(deleted.length===0){ box.innerHTML = '<div style="color:var(--text-muted);">目前没有已删除的活动。</div>'; return; }
-  box.innerHTML = deleted.map(function(b){
+  if(deleted.length===0){ box.innerHTML = '<div style="color:var(--text-muted);">目前没有已删除的活动。</div>'; pagBox.innerHTML=''; return; }
+  var totalPages = Math.ceil(deleted.length / PAGE_SIZE);
+  if(deletedPage >= totalPages) deletedPage = totalPages - 1;
+  if(deletedPage < 0) deletedPage = 0;
+  var pageItems = deleted.slice(deletedPage*PAGE_SIZE, deletedPage*PAGE_SIZE+PAGE_SIZE);
+  box.innerHTML = pageItems.map(function(b){
     return '<div style="'+orgStyle(b.org)+'opacity:0.7;border-radius:var(--radius);padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">'
       +'<div><div style="font-weight:500;font-size:13px;">'+escapeHtml(b.eventName)+'</div>'
       +'<div style="font-size:11px;">'+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</div></div>'
       +'<button class="restoreBtn" data-id="'+b.id+'" style="flex-shrink:0;">复原</button>'
       +'</div>';
   }).join('');
+  if(totalPages>1){
+    pagBox.innerHTML = '<button id="deletedPrevBtn" '+(deletedPage===0?'disabled':'')+'>‹ 上一页</button>'
+      + '<span style="font-size:12px;align-self:center;color:var(--text-muted);">第 '+(deletedPage+1)+' / '+totalPages+' 页（共'+deleted.length+'笔）</span>'
+      + '<button id="deletedNextBtn" '+(deletedPage>=totalPages-1?'disabled':'')+'>下一页 ›</button>';
+    document.getElementById('deletedPrevBtn').addEventListener('click', function(){ deletedPage--; renderDeletedList(); });
+    document.getElementById('deletedNextBtn').addEventListener('click', function(){ deletedPage++; renderDeletedList(); });
+  } else {
+    pagBox.innerHTML = '';
+  }
   var btns = box.querySelectorAll('.restoreBtn');
   for(var i=0;i<btns.length;i++){
     btns[i].addEventListener('click', function(){
@@ -1410,13 +1476,17 @@ document.getElementById('collectPayment').addEventListener('change', function(e)
 });
 document.getElementById('viewCalendarBtn').addEventListener('click', function(){ switchView('calendar'); });
 document.getElementById('viewRegisterBtn').addEventListener('click', function(){ switchView('register'); });
+document.getElementById('viewAdminBtn').addEventListener('click', function(){ switchView('admin'); });
 function switchView(view){
   currentView = view;
   document.getElementById('calendarView').style.display = view==='calendar' ? 'block' : 'none';
   document.getElementById('registrationView').style.display = view==='register' ? 'block' : 'none';
+  document.getElementById('adminView').style.display = view==='admin' ? 'block' : 'none';
   document.getElementById('viewCalendarBtn').style.fontWeight = view==='calendar' ? '600' : '400';
   document.getElementById('viewRegisterBtn').style.fontWeight = view==='register' ? '600' : '400';
+  document.getElementById('viewAdminBtn').style.fontWeight = view==='admin' ? '600' : '400';
   if(view==='register') renderRegistrationGallery();
+  if(view==='admin') renderDeletedList();
 }
 document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
 
@@ -1739,5 +1809,6 @@ document.getElementById('pdfExportBtn').addEventListener('click', function(){
   document.getElementById('loadStatus').textContent = '系统初始化错误：'+(topErr && topErr.message ? topErr.message : String(topErr));
 }
 </script>
+</div>
 </body>
 </html>
