@@ -555,7 +555,11 @@ function fallbackCopy(text){
 }
 function buildSummary(b){
   var attendees = b.attendees || [];
-  var going = attendees.filter(function(a){return a.response==='去';}).map(function(a){return a.name+(a.phone?('('+a.phone+')'):'');});
+  var going = attendees.filter(function(a){return a.response==='去';}).map(function(a){
+    var phoneTag = a.phone ? ('('+a.phone+')') : '';
+    var paidTag = b.collectPayment ? ('［'+(a.paid==='是'?'已付款':'未付款')+'］') : '';
+    return a.name+phoneTag+paidTag;
+  });
   var notGoing = attendees.filter(function(a){return a.response==='不去';}).map(function(a){return a.name;});
   var lines = [];
   lines.push(b.eventName);
@@ -755,18 +759,18 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
         + '</div>';
     }
 
-    card += '<button class="'+prefix+'CopyBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制文字摘要'+(copyFeedbackId===(prefix+b.id)?'（已复制）':'')+'</button>';
-    card += '<button class="'+prefix+'CopyLinkBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+prefix+b.id)?'（已复制）':'')+'</button>';
     if(attendees.length>0){
       card += '<button class="'+prefix+'CopyListBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制报名名单（含付款状态，需要密码）</button>';
     }
 
-    if(showRemoveBtn){
-      card += '<button class="'+prefix+'RemoveBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">从活动更新移除（需要密码）</button>';
-    }
-
-    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">管理员手动新增 / 修改报名者（需要密码）</summary>'
-      + '<div class="'+prefix+'AdminForm" data-id="'+b.id+'" style="margin-top:8px;background:var(--surface-2);border-radius:8px;padding:10px;">'
+    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">更多操作（复制摘要 / 连结 / 移除 / 手动新增报名者）</summary>'
+      + '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">'
+      + '<button class="'+prefix+'CopyBtn" data-id="'+b.id+'" style="width:100%;">复制文字摘要'+(copyFeedbackId===(prefix+b.id)?'（已复制）':'')+'</button>'
+      + '<button class="'+prefix+'CopyLinkBtn" data-id="'+b.id+'" style="width:100%;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+prefix+b.id)?'（已复制）':'')+'</button>'
+      + (showRemoveBtn ? ('<button class="'+prefix+'RemoveBtn" data-id="'+b.id+'" style="width:100%;">从活动更新移除（需要密码）</button>') : '')
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">管理员手动新增 / 修改报名者（需要密码）</div>'
+      + '<div class="'+prefix+'AdminForm" data-id="'+b.id+'" style="background:var(--surface-2);border-radius:8px;padding:10px;">'
       + '<input type="text" class="'+prefix+'AdminName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
       + '<input type="tel" class="'+prefix+'AdminPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
       + '<div style="display:flex;gap:8px;margin-bottom:6px;">'
