@@ -257,14 +257,14 @@ a { color: inherit; }
   <div style="font-size:15px;font-weight:500;margin-bottom:8px;">全校大活动</div>
   <div id="bigEventList" style="margin-bottom:20px;"></div>
 
-  <div style="font-size:16px;font-weight:500;margin-bottom:8px;">活动更新</div>
+  <div style="font-size:16px;font-weight:500;margin-bottom:8px;">开放报名活动</div>
   <div id="debugCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
   <div id="rsvpList"></div>
   <div id="pastSection" style="margin-top:20px;">
-    <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text-muted);">过去活动</div>
+    <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text-muted);">过去的报名活动</div>
     <div id="pastList"></div>
   </div>
-  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">可用"复制文字摘要"按钮把内容贴到WhatsApp群，或"加入Google日历"存到你自己的日历。「从活动更新移除」只是不再显示于此列表，不会删除月历纪录；要删除月历纪录请到月历点选当天进行删除。以上都需要管理密码。</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">「复制活动连结」分享去WhatsApp，别人点了会直接跳到这个活动。已报名但还没付款的人，可以点自己名字旁边的「标记已付款」自助更新。「从活动更新移除」只是不再显示于此列表，不会删除月历纪录。以上标示"需要密码"的操作都需要活动密码。</div>
 </div>
 
 </div>
@@ -684,74 +684,103 @@ function renderRegistrationGallery(){
   var list = activeBookings().filter(function(b){ return b.needRsvp && b.date>=today; }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
   var groups = groupForList(list);
   if(groups.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;">目前没有开放报名的活动。</div>'; return; }
-  box.innerHTML = groups.map(function(g){ return buildGalleryCard(g.rep, g.count); }).join('');
-  bindGalleryCardHandlers(box);
+  box.innerHTML = groups.map(function(g){ return buildRegCard(g.rep, g.count, 'gallery', galleryExpandedId===g.rep.id, false); }).join('');
+  bindRegCardHandlers(box, 'gallery', function(){return galleryExpandedId;}, function(v){galleryExpandedId=v;}, renderRegistrationGallery);
 }
 
-function buildGalleryCard(b, count){
+function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
   var attendees = b.attendees || [];
   var going = attendees.filter(function(a){return a.response==='去';}).length;
-  var isOpen = galleryExpandedId === b.id;
   var posterHtml = b.posterUrl
     ? '<img src="'+escapeHtml(b.posterUrl)+'" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px 12px 0 0;display:block;" onerror="this.style.display=\'none\';">'
     : '<div style="width:100%;aspect-ratio:1/1;'+orgStyle(b.org)+'border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:12px;">'+escapeHtml(b.eventName)+'</div>';
   var descShort = b.longDescription ? (b.longDescription.length>60 ? b.longDescription.slice(0,60)+'…' : b.longDescription) : '';
-  var card = '<div id="galleryCard-'+b.id+'" style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface-0);">'
+  var card = '<div id="'+prefix+'Card-'+b.id+'" style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface-0);margin-bottom:12px;">'
     + posterHtml
     + '<div style="padding:12px;">'
     + '<div style="font-weight:600;font-size:14px;margin-bottom:4px;">'+escapeHtml(b.eventName)+(count>1?(' <span style="font-size:10px;font-weight:400;color:var(--text-muted);">（重复，共'+count+'场）</span>'):'')+'</div>'
     + '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">'+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</div>'
     + (b.longDescription ? '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;white-space:pre-wrap;">'+escapeHtml(isOpen ? b.longDescription : descShort)+'</div>' : '')
     + '<div style="font-size:12px;margin-bottom:8px;">已报名 '+going+' 人'+(b.collectPayment?(' · '+escapeHtml(b.paymentInfo||'需收费')):'')+'</div>'
-    + '<button class="galleryToggle" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">'+(isOpen?'收起':'查看详情 / 报名')+'</button>';
+    + '<button class="'+prefix+'Toggle" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">'+(isOpen?'收起':'查看详情 / 报名')+'</button>';
 
   if(isOpen){
-    card += '<div class="galleryRsvpForm" data-id="'+b.id+'" style="background:var(--surface-1);border-radius:8px;padding:10px;margin-bottom:6px;">'
+    card += '<div class="'+prefix+'RsvpForm" data-id="'+b.id+'" style="background:var(--surface-1);border-radius:8px;padding:10px;margin-bottom:8px;">'
       + '<div style="font-size:12px;font-weight:500;margin-bottom:6px;">登记报名</div>'
-      + '<input type="text" class="grName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
-      + '<input type="tel" class="grPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
+      + '<input type="text" class="'+prefix+'Name" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
+      + '<input type="tel" class="'+prefix+'Phone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
       + '<div style="display:flex;gap:8px;margin-bottom:6px;">'
-      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="gresp'+b.id+'" class="grResp" value="去" style="width:auto;">参加</label>'
-      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="gresp'+b.id+'" class="grResp" value="不去" style="width:auto;">不参加</label>'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="'+prefix+'resp'+b.id+'" class="'+prefix+'Resp" value="去" style="width:auto;">参加</label>'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="'+prefix+'resp'+b.id+'" class="'+prefix+'Resp" value="不去" style="width:auto;">不参加</label>'
       + '</div>';
     if(b.collectPayment){
       card += '<label style="font-size:12px;display:block;margin-bottom:4px;">是否已付款'+(b.paymentInfo?('（'+escapeHtml(b.paymentInfo)+'）'):'')+'</label>'
-        + '<select class="grPaid" style="width:100%;margin-bottom:6px;"><option value="否">否，还没付款</option><option value="是">是，已付款</option></select>';
+        + '<select class="'+prefix+'Paid" style="width:100%;margin-bottom:6px;"><option value="否">否，还没付款</option><option value="是">是，已付款</option></select>';
     }
-    card += '<input type="text" class="grRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
-      + '<button class="gallerySubmitRsvp" data-id="'+b.id+'" style="width:100%;">提交报名</button>'
+    card += '<input type="text" class="'+prefix+'Remark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
+      + '<button class="'+prefix+'SubmitRsvp" data-id="'+b.id+'" style="width:100%;">提交报名</button>'
       + '</div>';
+
     if(attendees.length>0){
-      card += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">'+attendees.map(function(a){return escapeHtml(a.name)+'（'+a.response+(b.collectPayment?('・'+(a.paid==='是'?'已付款':'未付款')):'')+'）';}).join('、')+'</div>';
+      card += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:flex;flex-direction:column;gap:4px;">'
+        + attendees.map(function(a){
+            var paidTag = b.collectPayment ? ('・'+(a.paid==='是'?'已付款':'未付款')) : '';
+            var markBtn = (b.collectPayment && a.paid!=='是') ? ('<button class="'+prefix+'MarkPaid" data-id="'+b.id+'" data-name="'+escapeHtml(a.name)+'" style="font-size:10px;padding:2px 6px;margin-left:6px;">标记已付款</button>') : '';
+            return '<div>'+escapeHtml(a.name)+'（'+a.response+paidTag+'）'+markBtn+'</div>';
+          }).join('')
+        + '</div>';
     }
-    card += '<button class="galleryCopyLinkBtn" data-id="'+b.id+'" style="width:100%;">复制活动连结</button>';
+
+    card += '<button class="'+prefix+'CopyBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制文字摘要'+(copyFeedbackId===(prefix+b.id)?'（已复制）':'')+'</button>';
+    card += '<button class="'+prefix+'CopyLinkBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+prefix+b.id)?'（已复制）':'')+'</button>';
+
+    if(showRemoveBtn){
+      card += '<button class="'+prefix+'RemoveBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">从活动更新移除（需要密码）</button>';
+    }
+
+    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">管理员手动新增 / 修改报名者（需要密码）</summary>'
+      + '<div class="'+prefix+'AdminForm" data-id="'+b.id+'" style="margin-top:8px;background:var(--surface-2);border-radius:8px;padding:10px;">'
+      + '<input type="text" class="'+prefix+'AdminName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
+      + '<input type="tel" class="'+prefix+'AdminPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
+      + '<div style="display:flex;gap:8px;margin-bottom:6px;">'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="'+prefix+'adminresp'+b.id+'" class="'+prefix+'AdminResp" value="去" checked style="width:auto;">参加</label>'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="'+prefix+'adminresp'+b.id+'" class="'+prefix+'AdminResp" value="不去" style="width:auto;">不参加</label>'
+      + '</div>';
+    if(b.collectPayment){
+      card += '<label style="font-size:12px;display:block;margin-bottom:4px;">是否已付款</label>'
+        + '<select class="'+prefix+'AdminPaid" style="width:100%;margin-bottom:6px;"><option value="是">是，已付款</option><option value="否">否，还没付款</option></select>';
+    }
+    card += '<input type="text" class="'+prefix+'AdminRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
+      + '<button class="'+prefix+'AdminSubmit" data-id="'+b.id+'" style="width:100%;">新增 / 更新此报名者</button>'
+      + '</div></details>';
   }
 
   card += '</div></div>';
   return card;
 }
 
-function bindGalleryCardHandlers(box){
-  var toggles = box.querySelectorAll('.galleryToggle');
+function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
+  var toggles = box.querySelectorAll('.'+prefix+'Toggle');
   for(var i=0;i<toggles.length;i++){
     toggles[i].addEventListener('click', function(){
       var id = Number(this.getAttribute('data-id'));
-      galleryExpandedId = galleryExpandedId===id ? null : id;
-      renderRegistrationGallery();
-      var el = document.getElementById('galleryCard-'+id);
+      setExpanded(getExpanded()===id ? null : id);
+      rerender();
+      var el = document.getElementById(prefix+'Card-'+id);
       if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
     });
   }
-  var submits = box.querySelectorAll('.gallerySubmitRsvp');
+  var submits = box.querySelectorAll('.'+prefix+'SubmitRsvp');
   for(var s=0;s<submits.length;s++){
-    submits[s].addEventListener('click', function(){
+    submits[s].addEventListener('click', function(ev){
+      if(ev && ev.stopPropagation) ev.stopPropagation();
       var id = Number(this.getAttribute('data-id'));
-      var formEl = box.querySelector('.galleryRsvpForm[data-id="'+id+'"]');
-      var name = formEl.querySelector('.grName').value.trim();
-      var phone = formEl.querySelector('.grPhone').value.trim();
-      var remark = formEl.querySelector('.grRemark').value.trim();
-      var respEl = formEl.querySelector('.grResp:checked');
-      var paidEl = formEl.querySelector('.grPaid');
+      var formEl = box.querySelector('.'+prefix+'RsvpForm[data-id="'+id+'"]');
+      var name = formEl.querySelector('.'+prefix+'Name').value.trim();
+      var phone = formEl.querySelector('.'+prefix+'Phone').value.trim();
+      var remark = formEl.querySelector('.'+prefix+'Remark').value.trim();
+      var respEl = formEl.querySelector('.'+prefix+'Resp:checked');
+      var paidEl = formEl.querySelector('.'+prefix+'Paid');
       var paid = paidEl ? paidEl.value : null;
       if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
       var btn = this;
@@ -762,19 +791,111 @@ function bindGalleryCardHandlers(box){
         for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
         if(booking) booking.attendees = res.attendees || booking.attendees;
         showToast('报名已提交');
-        renderRegistrationGallery();
+        rerender();
       }).catch(function(err){
         btn.disabled = false;
         alert('报名失败：'+(err && err.message ? err.message : err));
       });
     });
   }
-  var linkBtns = box.querySelectorAll('.galleryCopyLinkBtn');
+  var markBtns = box.querySelectorAll('.'+prefix+'MarkPaid');
+  for(var m=0;m<markBtns.length;m++){
+    markBtns[m].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var name = this.getAttribute('data-name');
+      var confirmName = prompt('请输入你的姓名以确认是「'+name+'」本人，标记为已付款：');
+      if(confirmName === null) return;
+      if(confirmName.trim() !== name){ alert('姓名不符，未更新。'); return; }
+      var booking = null;
+      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+      if(!booking) return;
+      var existing = null;
+      for(var ai=0; ai<(booking.attendees||[]).length; ai++){ if(booking.attendees[ai].name===name){ existing=booking.attendees[ai]; break; } }
+      if(!existing) return;
+      apiRsvp(id, name, existing.phone||'', existing.remark||'', existing.response, '是').then(function(res){
+        booking.attendees = res.attendees || booking.attendees;
+        showToast('已标记为已付款');
+        rerender();
+      }).catch(function(err){ alert('更新失败：'+(err && err.message ? err.message : err)); });
+    });
+  }
+  var copyBtns = box.querySelectorAll('.'+prefix+'CopyBtn');
+  for(var cb=0; cb<copyBtns.length; cb++){
+    copyBtns[cb].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var booking = null;
+      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+      if(!booking) return;
+      copyText(buildSummary(booking)).then(function(){
+        copyFeedbackId = prefix+id; rerender();
+        setTimeout(function(){ copyFeedbackId=null; rerender(); }, 2000);
+      });
+    });
+  }
+  var linkBtns = box.querySelectorAll('.'+prefix+'CopyLinkBtn');
   for(var l=0;l<linkBtns.length;l++){
     linkBtns[l].addEventListener('click', function(){
       var id = Number(this.getAttribute('data-id'));
       var url = window.location.origin + window.location.pathname + '?view=register&event=' + id;
-      copyText(url).then(function(){ showToast('连结已复制'); });
+      copyText(url).then(function(){
+        copyFeedbackId = 'link'+prefix+id; rerender();
+        setTimeout(function(){ copyFeedbackId=null; rerender(); }, 2000);
+      });
+    });
+  }
+  var removeBtns = box.querySelectorAll('.'+prefix+'RemoveBtn');
+  for(var rb=0; rb<removeBtns.length; rb++){
+    removeBtns[rb].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      showPasswordModal(function(password){
+        var newList = bookings.map(function(b){
+          if(b.id===id) return Object.assign({}, b, {showInUpdates:false});
+          return b;
+        });
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步存档了最新的资料，画面已经自动更新为最新内容，请重新确认后再试一次。'); renderAll(); return true; }
+          bookings = newList;
+          showToast('已从活动更新移除');
+          rerender();
+          renderAll();
+          return true;
+        });
+      }, '请输入活动密码');
+    });
+  }
+  var adminSubmits = box.querySelectorAll('.'+prefix+'AdminSubmit');
+  for(var asub=0; asub<adminSubmits.length; asub++){
+    adminSubmits[asub].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var formEl = box.querySelector('.'+prefix+'AdminForm[data-id="'+id+'"]');
+      var name = formEl.querySelector('.'+prefix+'AdminName').value.trim();
+      var phone = formEl.querySelector('.'+prefix+'AdminPhone').value.trim();
+      var remark = formEl.querySelector('.'+prefix+'AdminRemark').value.trim();
+      var respEl = formEl.querySelector('.'+prefix+'AdminResp:checked');
+      var paidEl = formEl.querySelector('.'+prefix+'AdminPaid');
+      var paid = paidEl ? paidEl.value : null;
+      if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
+      var respVal = respEl.value;
+      showPasswordModal(function(password){
+        var newList = bookings.map(function(b){
+          if(b.id!==id) return b;
+          var atts = (b.attendees || []).slice();
+          var idx2 = -1;
+          for(var ai2=0; ai2<atts.length; ai2++){ if(atts[ai2].name===name){ idx2=ai2; break; } }
+          var entry = {name:name, phone:phone, remark:remark, response:respVal, paid:paid};
+          if(idx2===-1) atts.push(entry); else atts[idx2] = entry;
+          return Object.assign({}, b, {attendees: atts});
+        });
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步存档了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); return true; }
+          bookings = newList;
+          showToast('已新增/更新报名者');
+          rerender();
+          return true;
+        });
+      }, '请输入活动密码');
     });
   }
 }
@@ -849,7 +970,7 @@ function handleDeepLink(){
         viewDate = new Date(found.date+'T00:00:00');
         renderCalendar(); renderRsvpList();
         setTimeout(function(){
-          var el = document.getElementById('eventCard-'+displayId);
+          var el = document.getElementById('sideCard-'+displayId);
           if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
         }, 200);
       }
@@ -1138,145 +1259,13 @@ function groupForList(list){
   return result;
 }
 
-function buildEventCard(rep, isPast, count){
-  var b = rep;
-  var attendees = b.attendees || [];
-  var going = attendees.filter(function(a){return a.response==='去';}).length;
-  var notGoing = attendees.filter(function(a){return a.response==='不去';}).length;
-  var isOpen = expandedId === b.id;
-
-  var card = '<div id="eventCard-'+b.id+'" style="'+orgStyle(b.org)+'border-radius:12px;padding:12px;margin-bottom:10px;'+(isPast?'opacity:0.55;':'')+'">'
-    +'<button class="expandToggle" data-id="'+b.id+'" style="width:100%;text-align:left;background:transparent;border:none;padding:0;color:inherit;">'
-    +'<div style="font-weight:500;font-size:14px;display:flex;justify-content:space-between;align-items:center;">'
-    +'<span>'+escapeHtml(b.eventName)+(count>1?(' <span style="font-size:10px;font-weight:400;">（重复，共'+count+'场）</span>'):'')+'</span><span>'+(isOpen?'▲':'▼')+'</span></div>'
-    +'<div style="font-size:11px;margin-top:2px;">'+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</div>';
-  if(b.needRsvp){ card += '<div style="font-size:12px;margin-top:6px;">参加 '+going+' 人 · 不参加 '+notGoing+' 人</div>'; }
-  card += '</button>';
-
-  if(isOpen){
-    card += '<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid rgba(255,255,255,0.4);">';
-    if(b.organizerName){ card += '<div style="font-size:12px;margin-bottom:6px;">负责人：'+escapeHtml(b.organizerName)+'</div>'; }
-    if(b.notes){ card += '<div style="font-size:12px;margin-bottom:10px;">备注：'+escapeHtml(b.notes)+'</div>'; }
-    card += '<a href="'+gcalUrl(b)+'" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:11px;text-decoration:underline;color:inherit;">+ 加入我的Google日历</a>';
-
-    if(b.needRsvp){
-      card += '<div class="rsvpForm" data-id="'+b.id+'" style="background:rgba(255,255,255,0.85);color:#1a1a1a;border-radius:8px;padding:10px;margin-bottom:10px;">'
-        +'<div style="font-size:12px;font-weight:500;margin-bottom:6px;">登记出席</div>'
-        +'<input type="text" class="rName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
-        +'<input type="tel" class="rPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
-        +'<div style="display:flex;gap:8px;margin-bottom:6px;">'
-        +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="resp'+b.id+'" class="rResp" value="去" style="width:auto;">参加</label>'
-        +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="resp'+b.id+'" class="rResp" value="不去" style="width:auto;">不参加</label>'
-        +'</div>';
-      if(b.collectPayment){
-        card += '<label style="font-size:12px;display:block;margin-bottom:4px;">是否已付款'+(b.paymentInfo?('（'+escapeHtml(b.paymentInfo)+'）'):'')+'</label>'
-          +'<select class="rPaid" style="width:100%;margin-bottom:6px;"><option value="否">否，还没付款</option><option value="是">是，已付款</option></select>';
-      }
-      card += '<input type="text" class="rRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
-        +'<button class="submitRsvp" data-id="'+b.id+'" style="width:100%;">提交</button>'
-        +'</div>';
-      if(attendees.length>0){ card += '<div style="font-size:11px;margin-bottom:8px;">'+attendees.map(function(a){return escapeHtml(a.name)+'（'+a.response+(b.collectPayment?('・'+(a.paid==='是'?'已付款':'未付款')):'')+(a.remark?('：'+escapeHtml(a.remark)):'')+'）';}).join('、')+'</div>'; }
-      card += '<button class="copyBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:8px;">复制文字摘要'+(copyFeedbackId===b.id?'（已复制）':'')+'</button>';
-      card += '<button class="copyLinkBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:8px;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+b.id)?'（已复制）':'')+'</button>';
-    }
-    card += '<button class="removeFromUpdatesBtn" data-id="'+b.id+'" style="width:100%;">从活动更新移除（需要密码）</button>';
-    card += '</div>';
-  }
-  card += '</div>';
-  return card;
-}
-
-function bindEventCardHandlers(container){
-  var expandBtns = container.querySelectorAll('.expandToggle');
-  for(var e=0;e<expandBtns.length;e++){
-    expandBtns[e].addEventListener('click', function(){
-      var id=Number(this.getAttribute('data-id'));
-      expandedId = expandedId===id?null:id; copyFeedbackId=null; renderRsvpList();
-    });
-  }
-  var submitRsvpBtns = container.querySelectorAll('.submitRsvp');
-  for(var sr=0; sr<submitRsvpBtns.length; sr++){
-    submitRsvpBtns[sr].addEventListener('click', function(ev){
-      ev.stopPropagation();
-      var id = Number(this.getAttribute('data-id'));
-      var formEl = container.querySelector('.rsvpForm[data-id="'+id+'"]');
-      var name = formEl.querySelector('.rName').value.trim();
-      var phone = formEl.querySelector('.rPhone').value.trim();
-      var remark = formEl.querySelector('.rRemark').value.trim();
-      var respEl = formEl.querySelector('.rResp:checked');
-      var paidEl = formEl.querySelector('.rPaid');
-      var paid = paidEl ? paidEl.value : null;
-      if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
-      var resp = respEl.value;
-      var btn = this;
-      btn.disabled = true;
-      apiRsvp(id, name, phone, remark, resp, paid).then(function(res){
-        btn.disabled = false;
-        var booking = null;
-        for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
-        if(booking) booking.attendees = res.attendees || booking.attendees;
-        showToast('出席登记已提交');
-        renderRsvpList();
-      }).catch(function(err){
-        btn.disabled = false;
-        alert('登记失败：'+(err && err.message ? err.message : err));
-      });
-    });
-  }
-  var copyBtns = container.querySelectorAll('.copyBtn');
-  for(var cb=0; cb<copyBtns.length; cb++){
-    copyBtns[cb].addEventListener('click', function(){
-      var id = Number(this.getAttribute('data-id'));
-      var booking = null;
-      for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
-      if(!booking) return;
-      copyText(buildSummary(booking)).then(function(){
-        copyFeedbackId = id; renderRsvpList();
-        setTimeout(function(){ copyFeedbackId=null; renderRsvpList(); }, 2000);
-      });
-    });
-  }
-  var copyLinkBtns = container.querySelectorAll('.copyLinkBtn');
-  for(var cl=0; cl<copyLinkBtns.length; cl++){
-    copyLinkBtns[cl].addEventListener('click', function(){
-      var id = Number(this.getAttribute('data-id'));
-      var url = window.location.origin + window.location.pathname + '?view=register&event=' + id;
-      copyText(url).then(function(){
-        copyFeedbackId = 'link'+id; renderRsvpList();
-        setTimeout(function(){ copyFeedbackId=null; renderRsvpList(); }, 2000);
-      });
-    });
-  }
-  var removeBtns = container.querySelectorAll('.removeFromUpdatesBtn');
-  for(var rb=0; rb<removeBtns.length; rb++){
-    removeBtns[rb].addEventListener('click', function(){
-      var idAttr = this.getAttribute('data-id');
-      var id = Number(idAttr);
-      showPasswordModal(function(password){
-        var newList = bookings.map(function(b){
-          if(b.id===id) return Object.assign({}, b, {showInUpdates:false});
-          return b;
-        });
-        return apiAdminWrite(password, 'bookings', newList).then(function(res){
-          if(res.wrongPassword) return false;
-          if(res.conflict){ alert('有人已经比你早一步储存了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); renderDayDetail(); return true; }
-          bookings = newList;
-          showToast('已从活动更新移除');
-          renderRsvpList();
-          return true;
-        });
-      }, '请输入活动密码');
-    });
-  }
-}
-
 function renderRsvpList(){
   var container = document.getElementById('rsvpList');
   var pastContainer = document.getElementById('pastList');
   try{
-    var visible = activeBookings().filter(function(b){ return b.showInUpdates !== false; });
+    var visible = activeBookings().filter(function(b){ return b.needRsvp && b.showInUpdates !== false; });
     if(!visible || visible.length===0){
-      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">目前没有设定要显示的活动。</div>';
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">目前没有开放报名的活动。</div>';
       pastContainer.innerHTML = '';
       return;
     }
@@ -1288,12 +1277,12 @@ function renderRsvpList(){
     var pastGroupsAll = groupForList(pastRaw);
     var pastGroups = pastGroupsAll.slice(0, 5);
 
-    container.innerHTML = upcomingGroups.length ? upcomingGroups.map(function(g){ return buildEventCard(g.rep, false, g.count); }).join('') : '<div style="color:var(--text-muted);font-size:13px;">目前没有即将到来的活动。</div>';
-    pastContainer.innerHTML = pastGroups.length ? pastGroups.map(function(g){ return buildEventCard(g.rep, true, g.count); }).join('') : '<div style="color:var(--text-muted);font-size:12px;">尚无过去的活动记录。</div>';
+    container.innerHTML = upcomingGroups.length ? upcomingGroups.map(function(g){ return buildRegCard(g.rep, g.count, 'side', expandedId===g.rep.id, true); }).join('') : '<div style="color:var(--text-muted);font-size:13px;">目前没有即将到来的报名活动。</div>';
+    pastContainer.innerHTML = pastGroups.length ? pastGroups.map(function(g){ return buildRegCard(g.rep, g.count, 'side', expandedId===g.rep.id, true); }).join('') : '<div style="color:var(--text-muted);font-size:12px;">尚无过去的报名活动记录。</div>';
     if(pastGroupsAll.length > 5){ pastContainer.innerHTML += '<div style="color:var(--text-muted);font-size:11px;margin-top:4px;">只显示最近5笔，共'+pastGroupsAll.length+'笔。</div>'; }
 
-    bindEventCardHandlers(container);
-    bindEventCardHandlers(pastContainer);
+    bindRegCardHandlers(container, 'side', function(){return expandedId;}, function(v){expandedId=v;}, renderRsvpList);
+    bindRegCardHandlers(pastContainer, 'side', function(){return expandedId;}, function(v){expandedId=v;}, renderRsvpList);
   }catch(err){
     container.innerHTML = '<div style="color:var(--text-danger);font-size:12px;">显示活动更新时发生错误：'+escapeHtml(String(err && err.message ? err.message : err))+'</div>';
   }
