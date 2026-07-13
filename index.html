@@ -98,6 +98,13 @@ a { color: inherit; }
 <div id="loadStatus" style="font-size:12px;color:var(--text-danger);margin-bottom:10px;"></div>
 <div id="upcomingBanner" style="display:none;background:var(--bg-warning);color:var(--text-warning);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;font-size:13px;"></div>
 
+<div style="display:flex;gap:8px;margin-bottom:16px;">
+  <button id="viewCalendarBtn" style="flex:1;font-weight:600;">📅 月历总览</button>
+  <button id="viewRegisterBtn" style="flex:1;">📋 公开报名活动</button>
+</div>
+
+<div id="calendarView">
+
 <div style="margin-bottom:14px;">
   <input type="text" id="searchInput" placeholder="搜寻活动名称或备注...（点击结果可直接跳转）" style="width:100%;">
 </div>
@@ -210,6 +217,16 @@ a { color: inherit; }
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;">
       <input type="checkbox" id="needRsvp" style="width:auto;">开放大家登记出席
     </label>
+    <div id="registrationExtra" style="display:none;margin-top:10px;padding:10px;background:var(--surface-0);border-radius:8px;border:1px dashed var(--border);">
+      <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">海报图片网址（选填，贴Google Drive/Facebook等已上传图片的分享连结）</label>
+      <input type="text" id="posterUrl" placeholder="https://..." style="width:100%;margin-bottom:8px;">
+      <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;">活动详细说明（选填，会显示在报名页面）</label>
+      <textarea id="longDescription" rows="3" style="width:100%;margin-bottom:8px;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;"></textarea>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:6px;">
+        <input type="checkbox" id="collectPayment" style="width:auto;">此活动需要收费
+      </label>
+      <input type="text" id="paymentInfo" placeholder="例如：RM10/人，现金或转账" style="width:100%;display:none;">
+    </div>
   </div>
   <div id="conflictWarning" style="display:none;background:var(--bg-danger);color:var(--text-danger);border-radius:var(--radius);padding:10px 12px;font-size:13px;margin-bottom:12px;"></div>
   <div style="display:flex;gap:8px;">
@@ -250,6 +267,14 @@ a { color: inherit; }
   <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">可用"复制文字摘要"按钮把内容贴到WhatsApp群，或"加入Google日历"存到你自己的日历。「从活动更新移除」只是不再显示于此列表，不会删除月历纪录；要删除月历纪录请到月历点选当天进行删除。以上都需要管理密码。</div>
 </div>
 
+</div>
+
+</div>
+
+<div id="registrationView" style="display:none;">
+  <div style="font-size:16px;font-weight:600;margin-bottom:6px;">公开报名活动</div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击卡片查看详情、报名与付款状态。</div>
+  <div id="registrationGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;"></div>
 </div>
 
 <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
@@ -328,10 +353,10 @@ function apiAdminWrite(password, key, value){
     });
   });
 }
-function apiRsvp(bookingId, name, phone, remark, response){
+function apiRsvp(bookingId, name, phone, remark, response, paid){
   return fetch('/api/rsvp', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({bookingId:bookingId, name:name, phone:phone, remark:remark, response:response})
+    body: JSON.stringify({bookingId:bookingId, name:name, phone:phone, remark:remark, response:response, paid:paid})
   }).then(function(r){
     return r.json().then(function(j){
       if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
@@ -400,6 +425,8 @@ function stripSpacePrefix(sp){
 
 var bookings = [];
 var bookingsVersion = 0;
+var currentView = 'calendar';
+var galleryExpandedId = null;
 var specialDatesVersion = 0;
 var specialDates = [];
 var customDates = [];
@@ -647,6 +674,109 @@ function renderAll(){
   renderRsvpList();
   renderBigEventList();
   renderDeletedList();
+  renderRegistrationGallery();
+}
+
+function renderRegistrationGallery(){
+  var box = document.getElementById('registrationGallery');
+  if(!box) return;
+  var today = todayStr();
+  var list = activeBookings().filter(function(b){ return b.needRsvp && b.date>=today; }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  var groups = groupForList(list);
+  if(groups.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;">目前没有开放报名的活动。</div>'; return; }
+  box.innerHTML = groups.map(function(g){ return buildGalleryCard(g.rep, g.count); }).join('');
+  bindGalleryCardHandlers(box);
+}
+
+function buildGalleryCard(b, count){
+  var attendees = b.attendees || [];
+  var going = attendees.filter(function(a){return a.response==='去';}).length;
+  var isOpen = galleryExpandedId === b.id;
+  var posterHtml = b.posterUrl
+    ? '<img src="'+escapeHtml(b.posterUrl)+'" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px 12px 0 0;display:block;" onerror="this.style.display=\'none\';">'
+    : '<div style="width:100%;aspect-ratio:1/1;'+orgStyle(b.org)+'border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:12px;">'+escapeHtml(b.eventName)+'</div>';
+  var descShort = b.longDescription ? (b.longDescription.length>60 ? b.longDescription.slice(0,60)+'…' : b.longDescription) : '';
+  var card = '<div id="galleryCard-'+b.id+'" style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface-0);">'
+    + posterHtml
+    + '<div style="padding:12px;">'
+    + '<div style="font-weight:600;font-size:14px;margin-bottom:4px;">'+escapeHtml(b.eventName)+(count>1?(' <span style="font-size:10px;font-weight:400;color:var(--text-muted);">（重复，共'+count+'场）</span>'):'')+'</div>'
+    + '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">'+b.date+' '+b.start+'-'+b.end+(b.space?(' · '+escapeHtml(b.space)):'')+' · '+escapeHtml(orgLabel(b.org))+'</div>'
+    + (b.longDescription ? '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;white-space:pre-wrap;">'+escapeHtml(isOpen ? b.longDescription : descShort)+'</div>' : '')
+    + '<div style="font-size:12px;margin-bottom:8px;">已报名 '+going+' 人'+(b.collectPayment?(' · '+escapeHtml(b.paymentInfo||'需收费')):'')+'</div>'
+    + '<button class="galleryToggle" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">'+(isOpen?'收起':'查看详情 / 报名')+'</button>';
+
+  if(isOpen){
+    card += '<div class="galleryRsvpForm" data-id="'+b.id+'" style="background:var(--surface-1);border-radius:8px;padding:10px;margin-bottom:6px;">'
+      + '<div style="font-size:12px;font-weight:500;margin-bottom:6px;">登记报名</div>'
+      + '<input type="text" class="grName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
+      + '<input type="tel" class="grPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
+      + '<div style="display:flex;gap:8px;margin-bottom:6px;">'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="gresp'+b.id+'" class="grResp" value="去" style="width:auto;">参加</label>'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="gresp'+b.id+'" class="grResp" value="不去" style="width:auto;">不参加</label>'
+      + '</div>';
+    if(b.collectPayment){
+      card += '<label style="font-size:12px;display:block;margin-bottom:4px;">是否已付款'+(b.paymentInfo?('（'+escapeHtml(b.paymentInfo)+'）'):'')+'</label>'
+        + '<select class="grPaid" style="width:100%;margin-bottom:6px;"><option value="否">否，还没付款</option><option value="是">是，已付款</option></select>';
+    }
+    card += '<input type="text" class="grRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
+      + '<button class="gallerySubmitRsvp" data-id="'+b.id+'" style="width:100%;">提交报名</button>'
+      + '</div>';
+    if(attendees.length>0){
+      card += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">'+attendees.map(function(a){return escapeHtml(a.name)+'（'+a.response+(b.collectPayment?('・'+(a.paid==='是'?'已付款':'未付款')):'')+'）';}).join('、')+'</div>';
+    }
+    card += '<button class="galleryCopyLinkBtn" data-id="'+b.id+'" style="width:100%;">复制活动连结</button>';
+  }
+
+  card += '</div></div>';
+  return card;
+}
+
+function bindGalleryCardHandlers(box){
+  var toggles = box.querySelectorAll('.galleryToggle');
+  for(var i=0;i<toggles.length;i++){
+    toggles[i].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      galleryExpandedId = galleryExpandedId===id ? null : id;
+      renderRegistrationGallery();
+      var el = document.getElementById('galleryCard-'+id);
+      if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  }
+  var submits = box.querySelectorAll('.gallerySubmitRsvp');
+  for(var s=0;s<submits.length;s++){
+    submits[s].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var formEl = box.querySelector('.galleryRsvpForm[data-id="'+id+'"]');
+      var name = formEl.querySelector('.grName').value.trim();
+      var phone = formEl.querySelector('.grPhone').value.trim();
+      var remark = formEl.querySelector('.grRemark').value.trim();
+      var respEl = formEl.querySelector('.grResp:checked');
+      var paidEl = formEl.querySelector('.grPaid');
+      var paid = paidEl ? paidEl.value : null;
+      if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
+      var btn = this;
+      btn.disabled = true;
+      apiRsvp(id, name, phone, remark, respEl.value, paid).then(function(res){
+        btn.disabled = false;
+        var booking = null;
+        for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
+        if(booking) booking.attendees = res.attendees || booking.attendees;
+        showToast('报名已提交');
+        renderRegistrationGallery();
+      }).catch(function(err){
+        btn.disabled = false;
+        alert('报名失败：'+(err && err.message ? err.message : err));
+      });
+    });
+  }
+  var linkBtns = box.querySelectorAll('.galleryCopyLinkBtn');
+  for(var l=0;l<linkBtns.length;l++){
+    linkBtns[l].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var url = window.location.origin + window.location.pathname + '?view=register&event=' + id;
+      copyText(url).then(function(){ showToast('连结已复制'); });
+    });
+  }
 }
 
 function renderDeletedList(){
@@ -684,6 +814,49 @@ function renderDeletedList(){
   }
 }
 
+function resolveDisplayId(booking){
+  if(!booking.seriesId) return booking.id;
+  var today = todayStr();
+  var siblings = bookings.filter(function(b){ return b.seriesId===booking.seriesId && !b.deleted; });
+  var upcoming = siblings.filter(function(b){return b.date>=today;}).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  if(upcoming.length) return upcoming[0].id;
+  var past = siblings.filter(function(b){return b.date<today;}).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
+  return past.length ? past[0].id : booking.id;
+}
+
+function handleDeepLink(){
+  var params = new URLSearchParams(window.location.search);
+  var view = params.get('view');
+  var eventIdParam = params.get('event');
+  if(view === 'register'){
+    switchView('register');
+  }
+  if(eventIdParam){
+    var eid = Number(eventIdParam);
+    var found = null;
+    for(var i=0;i<bookings.length;i++){ if(bookings[i].id===eid){ found=bookings[i]; break; } }
+    if(found){
+      var displayId = resolveDisplayId(found);
+      if(view === 'register'){
+        galleryExpandedId = displayId;
+        renderRegistrationGallery();
+        setTimeout(function(){
+          var el = document.getElementById('galleryCard-'+displayId);
+          if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+        }, 200);
+      } else {
+        expandedId = displayId;
+        viewDate = new Date(found.date+'T00:00:00');
+        renderCalendar(); renderRsvpList();
+        setTimeout(function(){
+          var el = document.getElementById('eventCard-'+displayId);
+          if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+        }, 200);
+      }
+    }
+  }
+}
+
 function loadBookings(){
   try{
     renderSpaceCheckboxes();
@@ -699,6 +872,7 @@ function loadBookings(){
     bookingsVersion = data.bookingsVersion || 0;
     specialDatesVersion = data.specialDatesVersion || 0;
     renderAll();
+    handleDeepLink();
   }).catch(function(err){
     document.getElementById('loadStatus').textContent = '载入资料错误：'+(err && err.message ? err.message : String(err));
     renderAll();
@@ -791,6 +965,12 @@ function fillFormForEdit(b){
   document.getElementById('endTime').value = b.end;
   document.getElementById('notes').value = b.notes || '';
   document.getElementById('needRsvp').checked = !!b.needRsvp;
+  document.getElementById('registrationExtra').style.display = b.needRsvp ? 'block' : 'none';
+  document.getElementById('posterUrl').value = b.posterUrl || '';
+  document.getElementById('longDescription').value = b.longDescription || '';
+  document.getElementById('collectPayment').checked = !!b.collectPayment;
+  document.getElementById('paymentInfo').value = b.paymentInfo || '';
+  document.getElementById('paymentInfo').style.display = b.collectPayment ? 'block' : 'none';
   document.getElementById('showInUpdates').checked = (b.showInUpdates !== false);
   document.getElementById('recurring').value = 'none';
   document.getElementById('recurUntilBox').style.display = 'none';
@@ -807,6 +987,12 @@ function resetForm(){
   document.getElementById('organizerName').value = '';
   document.getElementById('notes').value = '';
   document.getElementById('needRsvp').checked = false;
+  document.getElementById('registrationExtra').style.display = 'none';
+  document.getElementById('posterUrl').value = '';
+  document.getElementById('longDescription').value = '';
+  document.getElementById('collectPayment').checked = false;
+  document.getElementById('paymentInfo').value = '';
+  document.getElementById('paymentInfo').style.display = 'none';
   document.getElementById('showInUpdates').checked = true;
   document.getElementById('recurring').value = 'none';
   document.getElementById('recurUntilBox').style.display = 'none';
@@ -959,7 +1145,7 @@ function buildEventCard(rep, isPast, count){
   var notGoing = attendees.filter(function(a){return a.response==='不去';}).length;
   var isOpen = expandedId === b.id;
 
-  var card = '<div style="'+orgStyle(b.org)+'border-radius:12px;padding:12px;margin-bottom:10px;'+(isPast?'opacity:0.55;':'')+'">'
+  var card = '<div id="eventCard-'+b.id+'" style="'+orgStyle(b.org)+'border-radius:12px;padding:12px;margin-bottom:10px;'+(isPast?'opacity:0.55;':'')+'">'
     +'<button class="expandToggle" data-id="'+b.id+'" style="width:100%;text-align:left;background:transparent;border:none;padding:0;color:inherit;">'
     +'<div style="font-weight:500;font-size:14px;display:flex;justify-content:space-between;align-items:center;">'
     +'<span>'+escapeHtml(b.eventName)+(count>1?(' <span style="font-size:10px;font-weight:400;">（重复，共'+count+'场）</span>'):'')+'</span><span>'+(isOpen?'▲':'▼')+'</span></div>'
@@ -981,12 +1167,17 @@ function buildEventCard(rep, isPast, count){
         +'<div style="display:flex;gap:8px;margin-bottom:6px;">'
         +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="resp'+b.id+'" class="rResp" value="去" style="width:auto;">参加</label>'
         +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="resp'+b.id+'" class="rResp" value="不去" style="width:auto;">不参加</label>'
-        +'</div>'
-        +'<input type="text" class="rRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
+        +'</div>';
+      if(b.collectPayment){
+        card += '<label style="font-size:12px;display:block;margin-bottom:4px;">是否已付款'+(b.paymentInfo?('（'+escapeHtml(b.paymentInfo)+'）'):'')+'</label>'
+          +'<select class="rPaid" style="width:100%;margin-bottom:6px;"><option value="否">否，还没付款</option><option value="是">是，已付款</option></select>';
+      }
+      card += '<input type="text" class="rRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
         +'<button class="submitRsvp" data-id="'+b.id+'" style="width:100%;">提交</button>'
         +'</div>';
-      if(attendees.length>0){ card += '<div style="font-size:11px;margin-bottom:8px;">'+attendees.map(function(a){return escapeHtml(a.name)+'（'+a.response+(a.remark?('：'+escapeHtml(a.remark)):'')+'）';}).join('、')+'</div>'; }
+      if(attendees.length>0){ card += '<div style="font-size:11px;margin-bottom:8px;">'+attendees.map(function(a){return escapeHtml(a.name)+'（'+a.response+(b.collectPayment?('・'+(a.paid==='是'?'已付款':'未付款')):'')+(a.remark?('：'+escapeHtml(a.remark)):'')+'）';}).join('、')+'</div>'; }
       card += '<button class="copyBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:8px;">复制文字摘要'+(copyFeedbackId===b.id?'（已复制）':'')+'</button>';
+      card += '<button class="copyLinkBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:8px;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+b.id)?'（已复制）':'')+'</button>';
     }
     card += '<button class="removeFromUpdatesBtn" data-id="'+b.id+'" style="width:100%;">从活动更新移除（需要密码）</button>';
     card += '</div>';
@@ -1013,11 +1204,13 @@ function bindEventCardHandlers(container){
       var phone = formEl.querySelector('.rPhone').value.trim();
       var remark = formEl.querySelector('.rRemark').value.trim();
       var respEl = formEl.querySelector('.rResp:checked');
+      var paidEl = formEl.querySelector('.rPaid');
+      var paid = paidEl ? paidEl.value : null;
       if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
       var resp = respEl.value;
       var btn = this;
       btn.disabled = true;
-      apiRsvp(id, name, phone, remark, resp).then(function(res){
+      apiRsvp(id, name, phone, remark, resp, paid).then(function(res){
         btn.disabled = false;
         var booking = null;
         for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
@@ -1039,6 +1232,17 @@ function bindEventCardHandlers(container){
       if(!booking) return;
       copyText(buildSummary(booking)).then(function(){
         copyFeedbackId = id; renderRsvpList();
+        setTimeout(function(){ copyFeedbackId=null; renderRsvpList(); }, 2000);
+      });
+    });
+  }
+  var copyLinkBtns = container.querySelectorAll('.copyLinkBtn');
+  for(var cl=0; cl<copyLinkBtns.length; cl++){
+    copyLinkBtns[cl].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var url = window.location.origin + window.location.pathname + '?view=register&event=' + id;
+      copyText(url).then(function(){
+        copyFeedbackId = 'link'+id; renderRsvpList();
         setTimeout(function(){ copyFeedbackId=null; renderRsvpList(); }, 2000);
       });
     });
@@ -1209,6 +1413,22 @@ document.getElementById('recurring').addEventListener('change', function(e){
   document.getElementById('recurUntilBox').style.display = e.target.value==='weekly' ? 'block' : 'none';
   document.getElementById('customDatesBox').style.display = e.target.value==='custom' ? 'block' : 'none';
 });
+document.getElementById('needRsvp').addEventListener('change', function(e){
+  document.getElementById('registrationExtra').style.display = e.target.checked ? 'block' : 'none';
+});
+document.getElementById('collectPayment').addEventListener('change', function(e){
+  document.getElementById('paymentInfo').style.display = e.target.checked ? 'block' : 'none';
+});
+document.getElementById('viewCalendarBtn').addEventListener('click', function(){ switchView('calendar'); });
+document.getElementById('viewRegisterBtn').addEventListener('click', function(){ switchView('register'); });
+function switchView(view){
+  currentView = view;
+  document.getElementById('calendarView').style.display = view==='calendar' ? 'block' : 'none';
+  document.getElementById('registrationView').style.display = view==='register' ? 'block' : 'none';
+  document.getElementById('viewCalendarBtn').style.fontWeight = view==='calendar' ? '600' : '400';
+  document.getElementById('viewRegisterBtn').style.fontWeight = view==='register' ? '600' : '400';
+  if(view==='register') renderRegistrationGallery();
+}
 document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
 
 document.getElementById('prevMonth').addEventListener('click', function(){ viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1); renderCalendar(); });
@@ -1231,6 +1451,10 @@ document.getElementById('submitBtn').addEventListener('click', function(){
   var end = document.getElementById('endTime').value;
   var notes = document.getElementById('notes').value.trim();
   var needRsvp = document.getElementById('needRsvp').checked;
+  var posterUrl = document.getElementById('posterUrl').value.trim();
+  var longDescription = document.getElementById('longDescription').value.trim();
+  var collectPayment = document.getElementById('collectPayment').checked;
+  var paymentInfo = document.getElementById('paymentInfo').value.trim();
   var showInUpdates = document.getElementById('showInUpdates').checked;
   var recurring = document.getElementById('recurring').value;
   var recurUntil = document.getElementById('recurUntil').value;
@@ -1254,7 +1478,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
       showPasswordModal(function(password){
         var newList = bookings.map(function(bk){
           if(bk.seriesId === seriesIdCapture){
-            return Object.assign({}, bk, {org:org, organizerName:organizerName, eventName:eventName, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates});
+            return Object.assign({}, bk, {org:org, organizerName:organizerName, eventName:eventName, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates, posterUrl:posterUrl, longDescription:longDescription, collectPayment:collectPayment, paymentInfo:paymentInfo});
           }
           return bk;
         });
@@ -1271,7 +1495,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
       return;
     }
 
-    var candidate = Object.assign({}, bookings[idx], {org:org, space:space0, organizerName:organizerName, eventName:eventName, date:date, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates});
+    var candidate = Object.assign({}, bookings[idx], {org:org, space:space0, organizerName:organizerName, eventName:eventName, date:date, start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates, posterUrl:posterUrl, longDescription:longDescription, collectPayment:collectPayment, paymentInfo:paymentInfo});
     if(space0){
       var conflict = null;
       for(var i2=0;i2<bookings.length;i2++){
@@ -1318,7 +1542,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
   var newEntries = [];
   for(var di=0; di<dates.length; di++){
     for(var spi=0; spi<spacesToUse.length; spi++){
-      newEntries.push({org:org, space:spacesToUse[spi], organizerName:organizerName, eventName:eventName, date:dates[di], start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates, attendees:[], seriesId:seriesId});
+      newEntries.push({org:org, space:spacesToUse[spi], organizerName:organizerName, eventName:eventName, date:dates[di], start:start, end:end, notes:notes, needRsvp:needRsvp, showInUpdates:showInUpdates, posterUrl:posterUrl, longDescription:longDescription, collectPayment:collectPayment, paymentInfo:paymentInfo, attendees:[], seriesId:seriesId});
     }
   }
 
