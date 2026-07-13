@@ -54,16 +54,14 @@ a { color: inherit; }
   .puyuanGrid { grid-template-columns: 1fr !important; }
   .puyuanFormGrid2 { grid-template-columns: 1fr !important; }
   .puyuanFormGrid3 { grid-template-columns: 1fr !important; }
-  .blk-calendar, .blk-spacefilter, .blk-bigevent, .blk-reglist, .blk-form { grid-column: 1 !important; }
+  .blk-calendar, .blk-spacefilter, .blk-bigevent, .blk-reglist { grid-column: 1 !important; }
   .blk-calendar { order: 1 !important; }
   .blk-spacefilter { order: 2 !important; }
   .blk-bigevent { order: 3 !important; }
   .blk-reglist { order: 4 !important; }
-  .blk-form { order: 5 !important; }
 }
 .blk-calendar { grid-column: 1; order: 1; min-width: 0; }
 .blk-spacefilter { grid-column: 1; order: 2; min-width: 0; }
-.blk-form { grid-column: 1; order: 3; min-width: 0; }
 .blk-bigevent { grid-column: 2; order: 1; min-width: 0; }
 .blk-reglist { grid-column: 2; order: 2; min-width: 0; }
 .dayCell { position:relative; height:60px; overflow:hidden; text-align:left; border:0.5px solid var(--border); border-radius:6px; padding:3px; display:flex; flex-direction:column; transition: transform 0.15s ease; cursor:pointer; background:#fff; }
@@ -170,7 +168,21 @@ a { color: inherit; }
   <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">「复制活动连结」分享去WhatsApp，别人点了会直接跳到这个活动。已报名但还没付款的人，可以点自己名字旁边的「标记已付款」自助更新。以上标示"需要密码"的操作都需要活动密码。</div>
 </div>
 
-<div class="blk-form" style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem;">
+
+</div>
+
+</div>
+
+<div id="registrationView" style="display:none;">
+  <div style="font-size:16px;font-weight:600;margin-bottom:6px;">公开报名活动</div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击卡片查看详情、报名与付款状态。</div>
+  <div id="registrationGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;"></div>
+</div>
+
+<div id="adminView" style="display:none;">
+  <div style="font-size:16px;font-weight:600;margin-bottom:16px;">管理</div>
+
+<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:2rem;">
   <div id="formTitle" style="font-size:16px;font-weight:500;margin-bottom:12px;">新增活动 / 预订</div>
   <div class="puyuanFormGrid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
     <div>
@@ -265,18 +277,6 @@ a { color: inherit; }
   </div>
 </div>
 
-</div>
-
-</div>
-
-<div id="registrationView" style="display:none;">
-  <div style="font-size:16px;font-weight:600;margin-bottom:6px;">公开报名活动</div>
-  <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击卡片查看详情、报名与付款状态。</div>
-  <div id="registrationGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;"></div>
-</div>
-
-<div id="adminView" style="display:none;">
-  <div style="font-size:16px;font-weight:600;margin-bottom:16px;">管理</div>
 
   <div style="margin-bottom:2rem;">
     <div style="font-size:14px;font-weight:500;margin-bottom:8px;">标记假期 / 全校活动日（需要密码）</div>
