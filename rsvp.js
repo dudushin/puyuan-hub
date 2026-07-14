@@ -53,10 +53,19 @@ module.exports = async function handler(req, res) {
 
     const patchRes = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings', {
       method: 'PATCH',
-      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
       body: JSON.stringify({ value: bookings })
     });
     if (!patchRes.ok) throw new Error('Supabase update HTTP ' + patchRes.status);
+    const patched = await patchRes.json();
+    if (!patched || patched.length === 0) {
+      const postRes = await fetch(SUPABASE_URL + '/rest/v1/app_data', {
+        method: 'POST',
+        headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ key: 'bookings', value: bookings })
+      });
+      if (!postRes.ok) throw new Error('Supabase insert HTTP ' + postRes.status);
+    }
 
     res.status(200).json({ ok: true, attendees: bookings[idx].attendees });
   } catch (err) {
