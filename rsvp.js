@@ -34,12 +34,12 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings&select=value', {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings&select=value,id&order=id.desc&limit=1', {
       headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
     });
     if (!r.ok) throw new Error('Supabase HTTP ' + r.status);
     const rows = await r.json();
-    const bookings = (rows && rows[0] && rows[0].value) ? rows[0].value : [];
+    const bookings = (rows && rows[0] && rows[0].value !== undefined) ? rows[0].value : [];
 
     const idx = bookings.findIndex(function (b) { return String(b.id) === String(bookingId); });
     if (idx === -1) { res.status(404).json({ error: 'booking_not_found' }); return; }
@@ -66,12 +66,34 @@ module.exports = async function handler(req, res) {
       if (!postRes.ok) throw new Error('Supabase insert HTTP ' + postRes.status);
     }
 
+    // Self-heal: if duplicate 'bookings' rows ever accumulated (e.g. from a past
+    // update-blocked-fell-back-to-insert scenario), keep only the most recent one.
+    try {
+      const dupCheck = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings&select=id&order=id.desc', {
+        headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
+      });
+      if (dupCheck.ok) {
+        const dupRows = await dupCheck.json();
+        if (Array.isArray(dupRows) && dupRows.length > 1) {
+          const idsToDelete = dupRows.slice(1).map(function (row) { return row.id; });
+          for (const staleId of idsToDelete) {
+            await fetch(SUPABASE_URL + '/rest/v1/app_data?id=eq.' + staleId, {
+              method: 'DELETE',
+              headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
+            });
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      // Non-fatal: the main write already succeeded above.
+    }
+
     // Bump the shared version counter so any admin session holding a stale copy
     // (e.g. an open "manage registrants" table) gets detected as a conflict
     // instead of silently overwriting this RSVP on their next save.
     var newBookingsVersion = null;
     try {
-      const vRes = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings_v&select=value', {
+      const vRes = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings_v&select=value&order=id.desc&limit=1', {
         headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
       });
       const vRows = vRes.ok ? await vRes.json() : [];

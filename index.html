@@ -327,7 +327,7 @@ try {
 
 // ====== 服务器端API（不再直接连Supabase，密码验证与写入都搬到服务器） ======
 function apiGetData(){
-  return fetch('/api/data').then(function(r){
+  return fetch('/api/data?_t=' + Date.now(), { cache: 'no-store' }).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.json();
   });
@@ -793,27 +793,12 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
         + '</div>';
     }
 
-    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">更多操作（复制摘要 / 连结 / 名单 / 移除 / 手动新增报名者）</summary>'
+    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">更多操作（复制摘要 / 连结 / 名单 / 移除 / 管理已报名名单）</summary>'
       + '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">'
       + '<button class="'+prefix+'CopyBtn" data-id="'+b.id+'" style="width:100%;">复制文字摘要'+(copyFeedbackId===(prefix+b.id)?'（已复制）':'')+'</button>'
       + '<button class="'+prefix+'CopyLinkBtn" data-id="'+b.id+'" style="width:100%;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+prefix+b.id)?'（已复制）':'')+'</button>'
       + (attendees.length>0 ? ('<button class="'+prefix+'CopyListBtn" data-id="'+b.id+'" style="width:100%;">复制报名名单（含付款状态，需要密码）</button>') : '')
       + (showRemoveBtn ? ('<button class="'+prefix+'RemoveBtn" data-id="'+b.id+'" style="width:100%;">从活动更新移除（需要密码）</button>') : '')
-      + '</div>'
-      + '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">管理员手动新增 / 修改报名者（需要密码）</div>'
-      + '<div class="'+prefix+'AdminForm" data-id="'+b.id+'" style="background:var(--surface-2);border-radius:8px;padding:10px;">'
-      + '<input type="text" class="'+prefix+'AdminName" placeholder="姓名" style="width:100%;margin-bottom:6px;">'
-      + '<input type="tel" class="'+prefix+'AdminPhone" placeholder="手机号码（选填）" style="width:100%;margin-bottom:6px;">'
-      + '<div style="display:flex;gap:8px;margin-bottom:6px;">'
-      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="'+prefix+'adminresp'+b.id+'" class="'+prefix+'AdminResp" value="去" checked style="width:auto;">参加</label>'
-      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="radio" name="'+prefix+'adminresp'+b.id+'" class="'+prefix+'AdminResp" value="不去" style="width:auto;">不参加</label>'
-      + '</div>';
-    if(b.collectPayment){
-      card += '<label style="font-size:12px;display:block;margin-bottom:4px;">是否已付款</label>'
-        + '<select class="'+prefix+'AdminPaid" style="width:100%;margin-bottom:6px;"><option value="是">是，已付款</option><option value="否">否，还没付款</option></select>';
-    }
-    card += '<input type="text" class="'+prefix+'AdminRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
-      + '<button class="'+prefix+'AdminSubmit" data-id="'+b.id+'" style="width:100%;">新增 / 更新此报名者</button>'
       + '</div>'
       + '<div style="font-size:11px;color:var(--text-muted);margin-top:12px;margin-bottom:6px;">已报名名单管理（需要密码）——可直接编辑、打勾删除，或在空白行新增，提交后整份取代原本名单</div>'
       + '<div style="overflow-x:auto;">'
@@ -973,40 +958,6 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
           showToast('已从活动更新移除');
           rerender();
           renderAll();
-          return true;
-        });
-      }, '请输入活动密码');
-    });
-  }
-  var adminSubmits = box.querySelectorAll('.'+prefix+'AdminSubmit');
-  for(var asub=0; asub<adminSubmits.length; asub++){
-    adminSubmits[asub].addEventListener('click', function(){
-      var id = Number(this.getAttribute('data-id'));
-      var formEl = box.querySelector('.'+prefix+'AdminForm[data-id="'+id+'"]');
-      var name = formEl.querySelector('.'+prefix+'AdminName').value.trim();
-      var phone = formEl.querySelector('.'+prefix+'AdminPhone').value.trim();
-      var remark = formEl.querySelector('.'+prefix+'AdminRemark').value.trim();
-      var respEl = formEl.querySelector('.'+prefix+'AdminResp:checked');
-      var paidEl = formEl.querySelector('.'+prefix+'AdminPaid');
-      var paid = paidEl ? paidEl.value : null;
-      if(!name || !respEl){ alert('请填写姓名并选择参加或不参加'); return; }
-      var respVal = respEl.value;
-      showPasswordModal(function(password){
-        var newList = bookings.map(function(b){
-          if(b.id!==id) return b;
-          var atts = (b.attendees || []).slice();
-          var idx2 = -1;
-          for(var ai2=0; ai2<atts.length; ai2++){ if(atts[ai2].name===name){ idx2=ai2; break; } }
-          var entry = {name:name, phone:phone, remark:remark, response:respVal, paid:paid};
-          if(idx2===-1) atts.push(entry); else atts[idx2] = entry;
-          return Object.assign({}, b, {attendees: atts});
-        });
-        return apiAdminWrite(password, 'bookings', newList).then(function(res){
-          if(res.wrongPassword) return false;
-          if(res.conflict){ alert('有人已经比你早一步存档了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); return true; }
-          bookings = newList;
-          showToast('已新增/更新报名者');
-          rerender();
           return true;
         });
       }, '请输入活动密码');
