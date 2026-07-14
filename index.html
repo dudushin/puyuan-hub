@@ -54,14 +54,12 @@ a { color: inherit; }
   .puyuanGrid { grid-template-columns: 1fr !important; }
   .puyuanFormGrid2 { grid-template-columns: 1fr !important; }
   .puyuanFormGrid3 { grid-template-columns: 1fr !important; }
-  .blk-calendar, .blk-spacefilter, .blk-bigevent, .blk-reglist { grid-column: 1 !important; }
+  .blk-calendar, .blk-bigevent, .blk-reglist { grid-column: 1 !important; }
   .blk-calendar { order: 1 !important; }
-  .blk-spacefilter { order: 2 !important; }
-  .blk-bigevent { order: 3 !important; }
-  .blk-reglist { order: 4 !important; }
+  .blk-bigevent { order: 2 !important; }
+  .blk-reglist { order: 3 !important; }
 }
 .blk-calendar { grid-column: 1; order: 1; min-width: 0; }
-.blk-spacefilter { grid-column: 1; order: 2; min-width: 0; }
 .blk-bigevent { grid-column: 2; order: 1; min-width: 0; }
 .blk-reglist { grid-column: 2; order: 2; min-width: 0; }
 .dayCell { position:relative; height:60px; overflow:hidden; text-align:left; border:0.5px solid var(--border); border-radius:6px; padding:3px; display:flex; flex-direction:column; transition: transform 0.15s ease; cursor:pointer; background:#fff; }
@@ -120,6 +118,14 @@ a { color: inherit; }
 </div>
 <div id="searchResults" style="display:none;margin-bottom:1rem;"></div>
 
+<div style="margin-bottom:1.5rem;">
+  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">依空间查看即将到来的活动</div>
+  <select id="spaceFilterSelect" style="width:100%;margin-bottom:10px;">
+    <option value="">选择空间…</option>
+  </select>
+  <div id="spaceFilterResults"></div>
+</div>
+
 <div id="mainContent" class="puyuanGrid" style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;">
 
 <div class="blk-calendar">
@@ -142,14 +148,6 @@ a { color: inherit; }
 
 <div id="dayDetail" style="display:none;background:var(--surface-1);border-radius:var(--radius);padding:12px;margin-bottom:1.5rem;font-size:13px;"></div>
 
-</div>
-
-<div class="blk-spacefilter">
-  <div style="font-size:14px;font-weight:500;margin-bottom:8px;">依空间查看即将到来的活动</div>
-  <select id="spaceFilterSelect" style="width:100%;margin-bottom:10px;">
-    <option value="">选择空间…</option>
-  </select>
-  <div id="spaceFilterResults"></div>
 </div>
 
 <div class="blk-bigevent">
@@ -177,6 +175,9 @@ a { color: inherit; }
   <div style="font-size:16px;font-weight:600;margin-bottom:6px;">公开报名活动</div>
   <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击卡片查看详情、报名与付款状态。</div>
   <div id="registrationGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;"></div>
+
+  <div style="font-size:15px;font-weight:600;margin-top:2rem;margin-bottom:6px;color:var(--text-muted);">过去的活动</div>
+  <div id="registrationGalleryPast" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;opacity:0.6;"></div>
 </div>
 
 <div id="adminView" style="display:none;">
@@ -385,7 +386,11 @@ function apiVerifyPassword(password, kind){
   return fetch('/api/verify-password', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({password:password, kind:kind})
-  }).then(function(r){ return r.ok; }).catch(function(){ return false; });
+  }).then(function(r){
+    if(r.status===401) return {ok:false, reason:'wrong'};
+    if(r.ok) return {ok:true};
+    return {ok:false, reason:'error', status:r.status};
+  }).catch(function(){ return {ok:false, reason:'network'}; });
 }
 function apiBackupExport(password){
   return fetch('/api/backup', {
@@ -707,13 +712,28 @@ function renderAll(){
 
 function renderRegistrationGallery(){
   var box = document.getElementById('registrationGallery');
+  var pastBox = document.getElementById('registrationGalleryPast');
   if(!box) return;
   var today = todayStr();
-  var list = activeBookings().filter(function(b){ return b.needRsvp && b.date>=today; }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
-  var groups = groupForList(list);
-  if(groups.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;">目前没有开放报名的活动。</div>'; return; }
-  box.innerHTML = groups.map(function(g){ return buildRegCard(g.rep, g.count, 'gallery', galleryExpandedId===g.rep.id, false); }).join('');
+  var all = activeBookings().filter(function(b){ return b.needRsvp; });
+  var upcoming = all.filter(function(b){ return b.date>=today; }).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
+  var past = all.filter(function(b){ return b.date<today; }).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
+
+  var upcomingGroups = groupForList(upcoming);
+  var pastGroupsAll = groupForList(past);
+  var pastGroups = pastGroupsAll.slice(0, 10);
+
+  if(upcomingGroups.length===0){ box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;">目前没有开放报名的活动。</div>'; }
+  else { box.innerHTML = upcomingGroups.map(function(g){ return buildRegCard(g.rep, g.count, 'gallery', galleryExpandedId===g.rep.id, false); }).join(''); }
+
+  if(pastGroups.length===0){ pastBox.innerHTML = '<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1;">尚无过去的报名活动记录。</div>'; }
+  else {
+    pastBox.innerHTML = pastGroups.map(function(g){ return buildRegCard(g.rep, g.count, 'galleryPast', galleryExpandedId===g.rep.id, false); }).join('');
+    if(pastGroupsAll.length > 10){ pastBox.innerHTML += '<div style="color:var(--text-muted);font-size:11px;grid-column:1/-1;">只显示最近10笔，共'+pastGroupsAll.length+'笔。</div>'; }
+  }
+
   bindRegCardHandlers(box, 'gallery', function(){return galleryExpandedId;}, function(v){galleryExpandedId=v;}, renderRegistrationGallery);
+  bindRegCardHandlers(pastBox, 'galleryPast', function(){return galleryExpandedId;}, function(v){galleryExpandedId=v;}, renderRegistrationGallery);
 }
 
 function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
@@ -759,14 +779,11 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
         + '</div>';
     }
 
-    if(attendees.length>0){
-      card += '<button class="'+prefix+'CopyListBtn" data-id="'+b.id+'" style="width:100%;margin-bottom:6px;">复制报名名单（含付款状态，需要密码）</button>';
-    }
-
-    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">更多操作（复制摘要 / 连结 / 移除 / 手动新增报名者）</summary>'
+    card += '<details style="margin-top:4px;"><summary style="font-size:11px;cursor:pointer;color:var(--text-muted);">更多操作（复制摘要 / 连结 / 名单 / 移除 / 手动新增报名者）</summary>'
       + '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">'
       + '<button class="'+prefix+'CopyBtn" data-id="'+b.id+'" style="width:100%;">复制文字摘要'+(copyFeedbackId===(prefix+b.id)?'（已复制）':'')+'</button>'
       + '<button class="'+prefix+'CopyLinkBtn" data-id="'+b.id+'" style="width:100%;">复制活动连结（分享到WhatsApp）'+(copyFeedbackId===('link'+prefix+b.id)?'（已复制）':'')+'</button>'
+      + (attendees.length>0 ? ('<button class="'+prefix+'CopyListBtn" data-id="'+b.id+'" style="width:100%;">复制报名名单（含付款状态，需要密码）</button>') : '')
       + (showRemoveBtn ? ('<button class="'+prefix+'RemoveBtn" data-id="'+b.id+'" style="width:100%;">从活动更新移除（需要密码）</button>') : '')
       + '</div>'
       + '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">管理员手动新增 / 修改报名者（需要密码）</div>'
@@ -783,7 +800,11 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
     }
     card += '<input type="text" class="'+prefix+'AdminRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
       + '<button class="'+prefix+'AdminSubmit" data-id="'+b.id+'" style="width:100%;">新增 / 更新此报名者</button>'
-      + '</div></details>';
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:12px;margin-bottom:4px;">批量新增 / 更新报名者（需要密码，每行一位，格式：姓名,手机号码,去或不去,已付款或未付款,备注）</div>'
+      + '<textarea class="'+prefix+'BulkInput" data-id="'+b.id+'" rows="3" placeholder="陈太太,0123456789,去,已付款,备注（每行一位）" style="width:100%;margin-bottom:6px;font-family:inherit;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:8px;"></textarea>'
+      + '<button class="'+prefix+'BulkSubmit" data-id="'+b.id+'" style="width:100%;">批量新增 / 更新</button>'
+      + '</details>';
   }
 
   card += '</div></div>';
@@ -843,11 +864,18 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
       var existing = null;
       for(var ai=0; ai<(booking.attendees||[]).length; ai++){ if(booking.attendees[ai].name===name){ existing=booking.attendees[ai]; break; } }
       if(!existing) return;
+      var prevPaid = existing.paid;
+      existing.paid = '是';
+      rerender();
       apiRsvp(id, name, existing.phone||'', existing.remark||'', existing.response, '是').then(function(res){
-        booking.attendees = res.attendees || booking.attendees;
+        if(res && Array.isArray(res.attendees)) booking.attendees = res.attendees;
         showToast('已标记为已付款');
         rerender();
-      }).catch(function(err){ alert('更新失败：'+(err && err.message ? err.message : err)); });
+      }).catch(function(err){
+        existing.paid = prevPaid;
+        rerender();
+        alert('更新失败，已还原显示：'+(err && err.message ? err.message : err));
+      });
     });
   }
   var copyBtns = box.querySelectorAll('.'+prefix+'CopyBtn');
@@ -879,18 +907,22 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
     copyListBtns[cli].addEventListener('click', function(){
       var id = Number(this.getAttribute('data-id'));
       showPasswordModal(function(password){
-        return apiVerifyPassword(password, 'booking').then(function(ok){
-          if(!ok) return false;
+        return apiVerifyPassword(password, 'booking').then(function(res){
+          if(res.reason==='error' || res.reason==='network'){
+            alert('验证服务暂时无法使用（'+(res.status?('HTTP '+res.status):'网络错误')+'），请确认 api/verify-password.js 是否已经上传到GitHub并部署成功。');
+            return false;
+          }
+          if(!res.ok) return false;
           var booking = null;
           for(var k=0;k<bookings.length;k++){ if(bookings[k].id===id){ booking=bookings[k]; break; } }
           if(!booking){ return true; }
           var atts = booking.attendees || [];
-          var lines = ['姓名\\t手机号码\\t参加/不参加\\t付款状态\\t备注'];
+          var lines = ['姓名\t手机号码\t参加/不参加\t付款状态\t备注'];
           atts.forEach(function(a){
             var paidCol = booking.collectPayment ? (a.paid==='是'?'已付款':'未付款') : '';
-            lines.push([a.name, a.phone||'', a.response, paidCol, a.remark||''].join('\\t'));
+            lines.push([a.name, a.phone||'', a.response, paidCol, a.remark||''].join('\t'));
           });
-          copyText(lines.join('\\n')).then(function(){
+          copyText(lines.join('\n')).then(function(){
             showToast('报名名单已复制（可直接贴到Excel）');
           });
           return true;
@@ -947,6 +979,52 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
           if(res.conflict){ alert('有人已经比你早一步存档了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); return true; }
           bookings = newList;
           showToast('已新增/更新报名者');
+          rerender();
+          return true;
+        });
+      }, '请输入活动密码');
+    });
+  }
+  var bulkSubmits = box.querySelectorAll('.'+prefix+'BulkSubmit');
+  for(var bsub=0; bsub<bulkSubmits.length; bsub++){
+    bulkSubmits[bsub].addEventListener('click', function(){
+      var id = Number(this.getAttribute('data-id'));
+      var ta = box.querySelector('.'+prefix+'BulkInput[data-id="'+id+'"]');
+      var raw = ta.value.trim();
+      if(!raw){ alert('请先输入报名者资料'); return; }
+      var rows = raw.split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l; });
+      var parsedEntries = [];
+      rows.forEach(function(line){
+        var parts = line.indexOf('\t')!==-1 ? line.split('\t') : line.split(',');
+        var pname = (parts[0]||'').trim();
+        if(!pname) return;
+        var pphone = (parts[1]||'').trim();
+        var prespRaw = (parts[2]||'').trim();
+        var ppaidRaw = (parts[3]||'').trim();
+        var premark = (parts[4]||'').trim();
+        var presponse = (prespRaw==='不去' || prespRaw==='不参加') ? '不去' : '去';
+        var ppaid = (ppaidRaw==='已付款' || ppaidRaw==='是') ? '是' : ((ppaidRaw==='未付款' || ppaidRaw==='否') ? '否' : null);
+        parsedEntries.push({name:pname, phone:pphone, response:presponse, paid:ppaid, remark:premark});
+      });
+      if(parsedEntries.length===0){ alert('没有解析到有效的报名资料，请确认格式：姓名,手机号码,去或不去,已付款或未付款,备注'); return; }
+      showPasswordModal(function(password){
+        var newList = bookings.map(function(b){
+          if(b.id!==id) return b;
+          var atts = (b.attendees || []).slice();
+          parsedEntries.forEach(function(pe){
+            var idx3 = -1;
+            for(var ai4=0; ai4<atts.length; ai4++){ if(atts[ai4].name===pe.name){ idx3=ai4; break; } }
+            var entry = {name:pe.name, phone:pe.phone, remark:pe.remark, response:pe.response, paid:pe.paid};
+            if(idx3===-1) atts.push(entry); else atts[idx3] = entry;
+          });
+          return Object.assign({}, b, {attendees: atts});
+        });
+        return apiAdminWrite(password, 'bookings', newList).then(function(res){
+          if(res.wrongPassword) return false;
+          if(res.conflict){ alert('有人已经比你早一步存档了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); return true; }
+          bookings = newList;
+          showToast('已批量新增/更新 '+parsedEntries.length+' 位报名者');
+          ta.value = '';
           rerender();
           return true;
         });
