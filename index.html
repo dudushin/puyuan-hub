@@ -374,6 +374,7 @@ function apiRsvp(bookingId, name, phone, remark, response, paid){
   }).then(function(r){
     return r.json().then(function(j){
       if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+      if(typeof j.bookingsVersion === 'number') bookingsVersion = j.bookingsVersion;
       return j;
     });
   });
@@ -732,13 +733,20 @@ function renderRegistrationGallery(){
   bindRegCardHandlers(pastBox, 'galleryPast', function(){return galleryExpandedId;}, function(v){galleryExpandedId=v;}, renderRegistrationGallery);
 }
 
-function buildBulkRow(collectPayment){
+function buildBulkRow(collectPayment, existing){
+  existing = existing || null;
+  var nameVal = existing ? escapeHtml(existing.name) : '';
+  var phoneVal = existing ? escapeHtml(existing.phone||'') : '';
+  var remarkVal = existing ? escapeHtml(existing.remark||'') : '';
+  var attendChecked = existing ? (existing.response==='去') : true;
+  var paidChecked = existing ? (existing.paid==='是') : false;
   return '<tr>'
-    + '<td style="padding:3px;"><input type="text" class="bulkName" placeholder="姓名" style="width:100%;min-width:70px;"></td>'
-    + '<td style="padding:3px;"><input type="tel" class="bulkPhone" placeholder="选填" style="width:100%;min-width:80px;"></td>'
-    + '<td style="padding:3px;text-align:center;"><input type="checkbox" class="bulkAttend" checked style="width:auto;"></td>'
-    + (collectPayment ? '<td style="padding:3px;text-align:center;"><input type="checkbox" class="bulkPaid" style="width:auto;"></td>' : '')
-    + '<td style="padding:3px;"><input type="text" class="bulkRemark" placeholder="选填" style="width:100%;min-width:70px;"></td>'
+    + '<td style="padding:3px;"><input type="text" class="bulkName" value="'+nameVal+'" placeholder="姓名" style="width:100%;min-width:70px;"></td>'
+    + '<td style="padding:3px;"><input type="tel" class="bulkPhone" value="'+phoneVal+'" placeholder="选填" style="width:100%;min-width:80px;"></td>'
+    + '<td style="padding:3px;text-align:center;"><input type="checkbox" class="bulkAttend" '+(attendChecked?'checked':'')+' style="width:auto;"></td>'
+    + (collectPayment ? ('<td style="padding:3px;text-align:center;"><input type="checkbox" class="bulkPaid" '+(paidChecked?'checked':'')+' style="width:auto;"></td>') : '')
+    + '<td style="padding:3px;"><input type="text" class="bulkRemark" value="'+remarkVal+'" placeholder="选填" style="width:100%;min-width:70px;"></td>'
+    + '<td style="padding:3px;text-align:center;"><input type="checkbox" class="bulkDelete" style="width:auto;" title="打勾＝删除这位报名者"></td>'
     + '</tr>';
 }
 
@@ -807,21 +815,23 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
     card += '<input type="text" class="'+prefix+'AdminRemark" placeholder="备注（选填）" style="width:100%;margin-bottom:6px;">'
       + '<button class="'+prefix+'AdminSubmit" data-id="'+b.id+'" style="width:100%;">新增 / 更新此报名者</button>'
       + '</div>'
-      + '<div style="font-size:11px;color:var(--text-muted);margin-top:12px;margin-bottom:6px;">批量新增 / 更新报名者（需要密码）</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:12px;margin-bottom:6px;">已报名名单管理（需要密码）——可直接编辑、打勾删除，或在空白行新增，提交后整份取代原本名单</div>'
       + '<div style="overflow-x:auto;">'
-      + '<table class="'+prefix+'BulkTable" data-id="'+b.id+'" style="width:100%;border-collapse:collapse;font-size:12px;min-width:420px;">'
+      + '<table class="'+prefix+'BulkTable" data-id="'+b.id+'" style="width:100%;border-collapse:collapse;font-size:12px;min-width:460px;">'
       + '<thead><tr>'
       + '<th style="text-align:left;padding:4px;font-weight:500;">姓名</th>'
       + '<th style="text-align:left;padding:4px;font-weight:500;">手机</th>'
       + '<th style="text-align:center;padding:4px;font-weight:500;">参加</th>'
       + (b.collectPayment ? '<th style="text-align:center;padding:4px;font-weight:500;">已付款</th>' : '')
       + '<th style="text-align:left;padding:4px;font-weight:500;">备注</th>'
+      + '<th style="text-align:center;padding:4px;font-weight:500;">删除</th>'
       + '</tr></thead>'
       + '<tbody class="'+prefix+'BulkRows" data-id="'+b.id+'" data-payment="'+(b.collectPayment?'1':'0')+'">'
-      + [0,1,2,3,4].map(function(){ return buildBulkRow(b.collectPayment); }).join('')
+      + attendees.map(function(a){ return buildBulkRow(b.collectPayment, a); }).join('')
+      + [0,1,2].map(function(){ return buildBulkRow(b.collectPayment, null); }).join('')
       + '</tbody></table></div>'
       + '<button class="'+prefix+'AddBulkRow" data-id="'+b.id+'" type="button" style="width:100%;margin-top:6px;margin-bottom:6px;">+ 新增一行</button>'
-      + '<button class="'+prefix+'BulkSubmit" data-id="'+b.id+'" style="width:100%;">批量新增 / 更新</button>'
+      + '<button class="'+prefix+'BulkSubmit" data-id="'+b.id+'" style="width:100%;">储存整份报名名单</button>'
       + '</details>';
   }
 
@@ -1019,37 +1029,32 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
       var id = Number(this.getAttribute('data-id'));
       var tbody = box.querySelector('.'+prefix+'BulkRows[data-id="'+id+'"]');
       var rowEls = tbody.querySelectorAll('tr');
-      var parsedEntries = [];
+      var finalEntries = [];
+      var deletedCount = 0;
       for(var ri=0; ri<rowEls.length; ri++){
         var row = rowEls[ri];
         var pname = row.querySelector('.bulkName').value.trim();
         if(!pname) continue;
+        var deleteEl = row.querySelector('.bulkDelete');
+        if(deleteEl && deleteEl.checked){ deletedCount++; continue; }
         var pphone = row.querySelector('.bulkPhone').value.trim();
         var premark = row.querySelector('.bulkRemark').value.trim();
         var attendEl = row.querySelector('.bulkAttend');
         var presponse = (attendEl && attendEl.checked) ? '去' : '不去';
         var paidEl = row.querySelector('.bulkPaid');
         var ppaid = paidEl ? (paidEl.checked ? '是' : '否') : null;
-        parsedEntries.push({name:pname, phone:pphone, response:presponse, paid:ppaid, remark:premark});
+        finalEntries.push({name:pname, phone:pphone, response:presponse, paid:ppaid, remark:premark});
       }
-      if(parsedEntries.length===0){ alert('请至少填写一位报名者的姓名'); return; }
       showPasswordModal(function(password){
         var newList = bookings.map(function(b){
           if(b.id!==id) return b;
-          var atts = (b.attendees || []).slice();
-          parsedEntries.forEach(function(pe){
-            var idx3 = -1;
-            for(var ai4=0; ai4<atts.length; ai4++){ if(atts[ai4].name===pe.name){ idx3=ai4; break; } }
-            var entry = {name:pe.name, phone:pe.phone, remark:pe.remark, response:pe.response, paid:pe.paid};
-            if(idx3===-1) atts.push(entry); else atts[idx3] = entry;
-          });
-          return Object.assign({}, b, {attendees: atts});
+          return Object.assign({}, b, {attendees: finalEntries});
         });
         return apiAdminWrite(password, 'bookings', newList).then(function(res){
           if(res.wrongPassword) return false;
           if(res.conflict){ alert('有人已经比你早一步存档了最新的资料，画面已经自动更新为最新内容，请重新确认后再修改一次。'); renderAll(); return true; }
           bookings = newList;
-          showToast('已批量新增/更新 '+parsedEntries.length+' 位报名者');
+          showToast('已储存报名名单（共'+finalEntries.length+'位'+(deletedCount>0?('，删除了'+deletedCount+'位'):'')+'）');
           rerender();
           return true;
         });

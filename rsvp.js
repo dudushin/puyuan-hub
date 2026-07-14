@@ -46,10 +46,9 @@ module.exports = async function handler(req, res) {
     if (!bookings[idx].needRsvp) { res.status(403).json({ error: 'rsvp_not_open' }); return; }
 
     if (!bookings[idx].attendees) bookings[idx].attendees = [];
-    const existingIdx = bookings[idx].attendees.findIndex(function (a) { return a.name === name; });
     const entry = { name: name, phone: phone, remark: remark, response: response, paid: paid };
-    if (existingIdx === -1) bookings[idx].attendees.push(entry);
-    else bookings[idx].attendees[existingIdx] = entry;
+    bookings[idx].attendees = bookings[idx].attendees.filter(function (a) { return a.name !== name; });
+    bookings[idx].attendees.push(entry);
 
     const patchRes = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings', {
       method: 'PATCH',
@@ -67,7 +66,36 @@ module.exports = async function handler(req, res) {
       if (!postRes.ok) throw new Error('Supabase insert HTTP ' + postRes.status);
     }
 
-    res.status(200).json({ ok: true, attendees: bookings[idx].attendees });
+    // Bump the shared version counter so any admin session holding a stale copy
+    // (e.g. an open "manage registrants" table) gets detected as a conflict
+    // instead of silently overwriting this RSVP on their next save.
+    var newBookingsVersion = null;
+    try {
+      const vRes = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings_v&select=value', {
+        headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
+      });
+      const vRows = vRes.ok ? await vRes.json() : [];
+      const currentVersion = (vRows && vRows[0] && typeof vRows[0].value === 'number') ? vRows[0].value : 0;
+      const nextVersion = currentVersion + 1;
+      const vPatchRes = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.bookings_v', {
+        method: 'PATCH',
+        headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({ value: nextVersion })
+      });
+      const vPatched = vPatchRes.ok ? await vPatchRes.json() : [];
+      if (!vPatched || vPatched.length === 0) {
+        await fetch(SUPABASE_URL + '/rest/v1/app_data', {
+          method: 'POST',
+          headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ key: 'bookings_v', value: nextVersion })
+        });
+      }
+      newBookingsVersion = nextVersion;
+    } catch (vErr) {
+      // Non-fatal: the RSVP itself already succeeded above; version bump is a best-effort safety net.
+    }
+
+    res.status(200).json({ ok: true, attendees: bookings[idx].attendees, bookingsVersion: newBookingsVersion });
   } catch (err) {
     res.status(500).json({ error: String(err && err.message ? err.message : err) });
   }
