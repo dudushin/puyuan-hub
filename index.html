@@ -159,11 +159,7 @@ a { color: inherit; }
   <div style="font-size:16px;font-weight:500;margin-bottom:8px;">开放报名活动</div>
   <div id="debugCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
   <div id="rsvpList"></div>
-  <div id="pastSection" style="margin-top:20px;">
-    <div style="font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text-muted);">过去的报名活动</div>
-    <div id="pastList"></div>
-  </div>
-  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">「复制活动连结」分享去WhatsApp，别人点了会直接跳到这个活动。已报名但还没付款的人，可以点自己名字旁边的「标记已付款」自助更新。以上标示"需要密码"的操作都需要活动密码。</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">「复制活动连结」分享去WhatsApp，别人点了会直接跳到这个活动。已报名但还没付款的人，可以点自己名字旁边的「标记已付款」自助更新。过去的报名活动请到「📋 公开报名活动」分页下方查看。以上标示"需要密码"的操作都需要活动密码。</div>
 </div>
 
 
@@ -562,7 +558,7 @@ function buildSummary(b){
   var attendees = b.attendees || [];
   var going = attendees.filter(function(a){return a.response==='去';}).map(function(a){
     var phoneTag = a.phone ? ('('+a.phone+')') : '';
-    var paidTag = b.collectPayment ? ('［'+(a.paid==='是'?'已付款':'未付款')+'］') : '';
+    var paidTag = b.collectPayment ? ('［'+(a.paid==='是'?'已付款 ✅':'未付款')+'］') : '';
     return a.name+phoneTag+paidTag;
   });
   var notGoing = attendees.filter(function(a){return a.response==='不去';}).map(function(a){return a.name;});
@@ -772,7 +768,7 @@ function buildRegCard(b, count, prefix, isOpen, showRemoveBtn){
     if(attendees.length>0){
       card += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:flex;flex-direction:column;gap:4px;">'
         + attendees.map(function(a){
-            var paidTag = b.collectPayment ? ('・'+(a.paid==='是'?'已付款':'未付款')) : '';
+            var paidTag = b.collectPayment ? ('・'+(a.paid==='是'?'已付款 ✅':'未付款')) : '';
             var markBtn = (b.collectPayment && a.paid!=='是') ? ('<button class="'+prefix+'MarkPaid" data-id="'+b.id+'" data-name="'+escapeHtml(a.name)+'" style="font-size:10px;padding:2px 6px;margin-left:6px;">标记已付款</button>') : '';
             return '<div>'+escapeHtml(a.name)+'（'+a.response+paidTag+'）'+markBtn+'</div>';
           }).join('')
@@ -867,9 +863,8 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
       var prevPaid = existing.paid;
       existing.paid = '是';
       rerender();
-      apiRsvp(id, name, existing.phone||'', existing.remark||'', existing.response, '是').then(function(res){
-        if(res && Array.isArray(res.attendees)) booking.attendees = res.attendees;
-        showToast('已标记为已付款');
+      apiRsvp(id, name, existing.phone||'', existing.remark||'', existing.response, '是').then(function(){
+        showToast('已标记为已付款 ✅');
         rerender();
       }).catch(function(err){
         existing.paid = prevPaid;
@@ -919,7 +914,7 @@ function bindRegCardHandlers(box, prefix, getExpanded, setExpanded, rerender){
           var atts = booking.attendees || [];
           var lines = ['姓名\t手机号码\t参加/不参加\t付款状态\t备注'];
           atts.forEach(function(a){
-            var paidCol = booking.collectPayment ? (a.paid==='是'?'已付款':'未付款') : '';
+            var paidCol = booking.collectPayment ? (a.paid==='是'?'已付款 ✅':'未付款') : '';
             lines.push([a.name, a.phone||'', a.response, paidCol, a.remark||''].join('\t'));
           });
           copyText(lines.join('\n')).then(function(){
@@ -1409,28 +1404,15 @@ function groupForList(list){
 
 function renderRsvpList(){
   var container = document.getElementById('rsvpList');
-  var pastContainer = document.getElementById('pastList');
   try{
     var visible = activeBookings().filter(function(b){ return b.needRsvp && b.showInUpdates !== false; });
-    if(!visible || visible.length===0){
-      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">目前没有开放报名的活动。</div>';
-      pastContainer.innerHTML = '';
-      return;
-    }
     var today = todayStr();
     var upcomingRaw = visible.filter(function(b){return b.date>=today;}).sort(function(a,b){return (a.date+a.start).localeCompare(b.date+b.start);});
-    var pastRaw = visible.filter(function(b){return b.date<today;}).sort(function(a,b){return (b.date+b.start).localeCompare(a.date+a.start);});
-
     var upcomingGroups = groupForList(upcomingRaw);
-    var pastGroupsAll = groupForList(pastRaw);
-    var pastGroups = pastGroupsAll.slice(0, 5);
 
     container.innerHTML = upcomingGroups.length ? upcomingGroups.map(function(g){ return buildRegCard(g.rep, g.count, 'side', expandedId===g.rep.id, true); }).join('') : '<div style="color:var(--text-muted);font-size:13px;">目前没有即将到来的报名活动。</div>';
-    pastContainer.innerHTML = pastGroups.length ? pastGroups.map(function(g){ return buildRegCard(g.rep, g.count, 'side', expandedId===g.rep.id, true); }).join('') : '<div style="color:var(--text-muted);font-size:12px;">尚无过去的报名活动记录。</div>';
-    if(pastGroupsAll.length > 5){ pastContainer.innerHTML += '<div style="color:var(--text-muted);font-size:11px;margin-top:4px;">只显示最近5笔，共'+pastGroupsAll.length+'笔。</div>'; }
 
     bindRegCardHandlers(container, 'side', function(){return expandedId;}, function(v){expandedId=v;}, renderRsvpList);
-    bindRegCardHandlers(pastContainer, 'side', function(){return expandedId;}, function(v){expandedId=v;}, renderRsvpList);
   }catch(err){
     container.innerHTML = '<div style="color:var(--text-danger);font-size:12px;">显示活动更新时发生错误：'+escapeHtml(String(err && err.message ? err.message : err))+'</div>';
   }
