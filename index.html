@@ -1608,7 +1608,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
     if(space0){
       var conflict = null;
       for(var i2=0;i2<bookings.length;i2++){
-        if(bookings[i2].id!==editingId && overlaps(bookings[i2], candidate)){ conflict = bookings[i2]; break; }
+        if(bookings[i2].id!==editingId && !bookings[i2].deleted && overlaps(bookings[i2], candidate)){ conflict = bookings[i2]; break; }
       }
       if(conflict){
         warnBox.innerHTML = '冲突：<b>'+escapeHtml(conflict.space)+'</b> 在 '+conflict.date+' '+conflict.start+'-'+conflict.end+' 已被 <b>'+escapeHtml(orgLabel(conflict.org))+'</b> 预订「'+escapeHtml(conflict.eventName)+'」。';
@@ -1659,7 +1659,7 @@ document.getElementById('submitBtn').addEventListener('click', function(){
     var cand = newEntries[ni];
     if(cand.space){
       var conf = null;
-      for(var bi=0;bi<bookings.length;bi++){ if(overlaps(bookings[bi], cand)){ conf=bookings[bi]; break; } }
+      for(var bi=0;bi<bookings.length;bi++){ if(!bookings[bi].deleted && overlaps(bookings[bi], cand)){ conf=bookings[bi]; break; } }
       if(conf){
         warnBox.innerHTML = '冲突：<b>'+escapeHtml(conf.space)+'</b> 在 '+conf.date+' '+conf.start+'-'+conf.end+' 已被 <b>'+escapeHtml(orgLabel(conf.org))+'</b> 预订「'+escapeHtml(conf.eventName)+'」，本次批次已取消，请调整后重试。';
         warnBox.style.display='block'; return;
