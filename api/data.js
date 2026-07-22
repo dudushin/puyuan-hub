@@ -12,6 +12,7 @@
 //   admin's concurrent edit.
 
 module.exports = async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const BOOKING_PASSWORD = process.env.BOOKING_PASSWORD;
@@ -23,12 +24,12 @@ module.exports = async function handler(req, res) {
   }
 
   async function fetchKey(key) {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key) + '&select=value', {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key) + '&select=value,id&order=id.desc&limit=1', {
       headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
     });
     if (!r.ok) throw new Error('Supabase HTTP ' + r.status);
     const rows = await r.json();
-    return (rows && rows[0] && rows[0].value) ? rows[0].value : null;
+    return (rows && rows[0] && rows[0].value !== undefined) ? rows[0].value : null;
   }
 
   async function writeKey(key, value) {
@@ -45,6 +46,27 @@ module.exports = async function handler(req, res) {
         body: JSON.stringify({ key: key, value: value })
       });
       if (!postRes.ok) throw new Error('Supabase insert HTTP ' + postRes.status);
+    }
+    // Self-heal: if duplicate rows ever accumulated for this key (e.g. from a past
+    // update-blocked-fell-back-to-insert scenario), keep only the most recent one.
+    try {
+      const dupCheck = await fetch(SUPABASE_URL + '/rest/v1/app_data?key=eq.' + encodeURIComponent(key) + '&select=id&order=id.desc', {
+        headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
+      });
+      if (dupCheck.ok) {
+        const dupRows = await dupCheck.json();
+        if (Array.isArray(dupRows) && dupRows.length > 1) {
+          const idsToDelete = dupRows.slice(1).map(function (r) { return r.id; });
+          for (const staleId of idsToDelete) {
+            await fetch(SUPABASE_URL + '/rest/v1/app_data?id=eq.' + staleId, {
+              method: 'DELETE',
+              headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + SERVICE_KEY }
+            });
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      // Non-fatal: the main write already succeeded above.
     }
   }
 
